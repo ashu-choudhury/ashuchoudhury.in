@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +94,9 @@ func (s *Server) filesHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		relPath := strings.TrimPrefix(r.URL.Path, "/files/")
+		if unescaped, err := url.PathUnescape(relPath); err == nil && unescaped != "" {
+			relPath = unescaped
+		}
 		localPath := filepath.Join(wwwDir, filepath.FromSlash(relPath))
 
 		if _, err := os.Stat(localPath); os.IsNotExist(err) && s.backup != nil {

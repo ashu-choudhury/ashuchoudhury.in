@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -165,13 +166,29 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 
 // RestoreFile fetches a single missing public file from S3 on-demand.
 func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) error {
-	s3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+	cleanRel := strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+	if unescaped, err := url.PathUnescape(cleanRel); err == nil && unescaped != "" {
+		cleanRel = unescaped
+	}
+
+	s3Key := b.cfg.Prefix + "www/" + cleanRel
 	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(b.cfg.Bucket),
 		Key:    aws.String(s3Key),
 	})
 	if err != nil {
-		return err
+		// Fallback: try raw relKey if unescaped key differed
+		rawS3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+		if rawS3Key != s3Key {
+			out, err = b.client.GetObject(ctx, &s3.GetObjectInput{
+				Bucket: aws.String(b.cfg.Bucket),
+				Key:    aws.String(rawS3Key),
+			})
+		}
+		if err != nil {
+			b.log.Printf("s3: restore file failed for %s (%s): %v", relKey, s3Key, err)
+			return err
+		}
 	}
 	defer out.Body.Close()
 
