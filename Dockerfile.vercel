@@ -5,6 +5,7 @@ FROM golang:1.24-alpine AS build
 # templ is only needed at generation time; the generated *_templ.go files
 # are committed, so the build stage does not need templ at all.
 WORKDIR /src
+ENV GOTOOLCHAIN=auto
 
 # Cache dependencies first (only re-runs on go.mod/go.sum changes).
 COPY go.mod go.sum ./
