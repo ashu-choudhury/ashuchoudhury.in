@@ -59,4 +59,4 @@ Open `http://localhost:8080` in your browser.
 
 ## License
 
-This project is released into the public domain under **[The Unlicense](LICENSE)**. Feel free to use the code for your own website or projects.
+This project is licensed under the **[MIT License](LICENSE)**. Feel free to use the code for your own website or projects.
