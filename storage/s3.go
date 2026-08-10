@@ -1,10 +1,3 @@
-// Package storage provides durable persistence for the site's data
-// directory. Everything is configured from the environment — nothing is
-// hardcoded — so the repository can be published publicly without secrets.
-//
-// Currently it implements an S3-compatible backup/restore for the SQLite
-// database (AWS S3, Cloudflare R2, MinIO, and similar all work via
-// S3_ENDPOINT + path-style requests).
 package storage
 
 import (
@@ -13,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -25,7 +19,8 @@ import (
 type Config struct {
 	Enabled  bool
 	Bucket   string
-	Key      string // object key (S3_PREFIX + db filename)
+	Prefix   string // object prefix (e.g. "portfolio/")
+	Key      string // default db object key (S3_PREFIX + db filename)
 	Region   string
 	Endpoint string
 	Interval time.Duration
@@ -34,16 +29,6 @@ type Config struct {
 
 // ConfigFromEnv builds the backup configuration from environment variables.
 // The backup is disabled unless S3_BUCKET is set.
-//
-//	S3_BUCKET                required — bucket name (enables the backup)
-//	S3_REGION                default us-east-1
-//	S3_ENDPOINT              optional — custom endpoint (R2 / MinIO)
-//	S3_PREFIX                optional — object key prefix, default "portfolio/"
-//	S3_DB_KEY                optional — db object name, default "portfolio.db"
-//	S3_INTERVAL              seconds between backups, default 300
-//	AWS_ACCESS_KEY_ID        optional — falls back to the default credential chain
-//	AWS_SECRET_ACCESS_KEY    optional
-//	AWS_SESSION_TOKEN        optional
 func ConfigFromEnv() Config {
 	c := Config{
 		Bucket:   os.Getenv("S3_BUCKET"),
@@ -57,13 +42,16 @@ func ConfigFromEnv() Config {
 	}
 	c.Enabled = true
 	prefix := envOr("S3_PREFIX", "portfolio/")
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	c.Prefix = prefix
 	dbKey := envOr("S3_DB_KEY", "portfolio.db")
 	c.Key = prefix + dbKey
 	return c
 }
 
-// Backup uploads the SQLite database to the bucket. The database is
-// checkpointed first (WAL flushed) so the object is a consistent snapshot.
+// Backup uploads the storage/persisted directory to the bucket.
 type Backup struct {
 	cfg    Config
 	client *s3.Client
@@ -93,77 +81,177 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 			o.UsePathStyle = true
 		}
 		if cfg.NoVerify {
-			// Self-hosted MinIO over plain HTTP / self-signed TLS.
 			o.HTTPClient = &httpNoVerifyClient{}
 		}
 	})
 	return &Backup{cfg: cfg, client: client, log: logger}, nil
 }
 
-// Restore downloads the database from S3 when the local file is missing
-// (e.g. a brand-new container with an empty volume). Existing local data is
-// never overwritten — the site is the source of truth once it has run.
+// Restore downloads missing files from S3 under storage/persisted/.
+// Existing local data is not overwritten.
 func (b *Backup) Restore(ctx context.Context, localPath string) error {
-	if _, err := os.Stat(localPath); err == nil {
-		b.log.Printf("s3: local database present, skipping restore (%s)", localPath)
-		return nil
-	}
-	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+	rootDir := filepath.Dir(localPath)
+
+	paginator := s3.NewListObjectsV2Paginator(b.client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(b.cfg.Bucket),
-		Key:    aws.String(b.cfg.Key),
+		Prefix: aws.String(b.cfg.Prefix),
 	})
-	if err != nil {
-		b.log.Printf("s3: no backup found at %s/%s (%v) — starting fresh", b.cfg.Bucket, b.cfg.Key, err)
-		return nil // no backup yet; first run
+
+	restoredCount := 0
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			b.log.Printf("s3: list objects under %s: %v", b.cfg.Prefix, err)
+			break
+		}
+		for _, obj := range page.Contents {
+			key := aws.ToString(obj.Key)
+			relKey := strings.TrimPrefix(key, b.cfg.Prefix)
+			if relKey == "" || strings.HasSuffix(relKey, "/") {
+				continue
+			}
+
+			// Ignore temporary SQLite journal files
+			if strings.HasSuffix(relKey, "-wal") || strings.HasSuffix(relKey, "-shm") || strings.HasSuffix(relKey, ".tmp") {
+				continue
+			}
+
+			targetPath := filepath.Join(rootDir, filepath.FromSlash(relKey))
+
+			// Skip if file already exists locally
+			if _, err := os.Stat(targetPath); err == nil {
+				continue
+			}
+
+			out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+				Bucket: aws.String(b.cfg.Bucket),
+				Key:    aws.String(key),
+			})
+			if err != nil {
+				b.log.Printf("s3: download %s failed: %v", key, err)
+				continue
+			}
+
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				out.Body.Close()
+				continue
+			}
+
+			f, err := os.Create(targetPath)
+			if err != nil {
+				out.Body.Close()
+				continue
+			}
+
+			if _, err := ioCopy(f, out.Body); err != nil {
+				_ = f.Close()
+				out.Body.Close()
+				continue
+			}
+			_ = f.Close()
+			out.Body.Close()
+			restoredCount++
+		}
 	}
-	defer out.Body.Close()
-	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
-		return err
+
+	if restoredCount > 0 {
+		b.log.Printf("s3: restored %d files into %s", restoredCount, rootDir)
+	} else {
+		b.log.Printf("s3: local storage synchronized (%s)", rootDir)
 	}
-	f, err := os.Create(localPath)
-	if err != nil {
-		return err
-	}
-	if _, err := ioCopy(f, out.Body); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	b.log.Printf("s3: restored database from %s/%s", b.cfg.Bucket, b.cfg.Key)
+
 	return nil
 }
 
-// Backup checkpoints the database and uploads it to S3.
+// Backup checkpoints the database and uploads all files inside storage/persisted/ to S3.
 func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) error, localPath string) error {
 	if checkpoint != nil {
 		if err := checkpoint(ctx); err != nil {
 			b.log.Printf("s3: wal checkpoint: %v", err)
 		}
 	}
-	f, err := os.Open(localPath)
-	if err != nil {
-		return err
+
+	rootDir := filepath.Dir(localPath)
+	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
+		return nil
 	}
-	defer f.Close()
-	_, err = b.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:       aws.String(b.cfg.Bucket),
-		Key:          aws.String(b.cfg.Key),
-		Body:         f,
-		ContentType:  aws.String("application/octet-stream"),
-		StorageClass: "STANDARD",
+
+	uploadedCount := 0
+	err := filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+
+		name := d.Name()
+		// Ignore temporary SQLite journal files
+		if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") || strings.HasSuffix(name, ".tmp") {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(rootDir, path)
+		if err != nil {
+			return nil
+		}
+
+		objectKey := b.cfg.Prefix + filepath.ToSlash(relPath)
+
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+
+		_, err = b.client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket:       aws.String(b.cfg.Bucket),
+			Key:          aws.String(objectKey),
+			Body:         f,
+			ContentType:  aws.String(detectContentType(path)),
+			StorageClass: "STANDARD",
+		})
+		if err != nil {
+			b.log.Printf("s3: upload %s failed: %v", objectKey, err)
+			return nil
+		}
+
+		uploadedCount++
+		return nil
 	})
+
 	if err != nil {
-		return err
+		b.log.Printf("s3: directory walk %s: %v", rootDir, err)
+	} else {
+		b.log.Printf("s3: backed up %d files to %s", uploadedCount, b.cfg.Prefix)
 	}
-	b.log.Printf("s3: backed up database to %s/%s", b.cfg.Bucket, b.cfg.Key)
+
 	return nil
 }
 
+func detectContentType(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".db":
+		return "application/x-sqlite3"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".svg":
+		return "image/svg+xml"
+	case ".pdf":
+		return "application/pdf"
+	case ".txt", ".md":
+		return "text/plain; charset=utf-8"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".mp4":
+		return "video/mp4"
+	case ".json":
+		return "application/json"
+	}
+	return "application/octet-stream"
+}
+
 // Run loops backups on the configured interval until ctx is cancelled.
-// The caller should cancel ctx (and wait) on shutdown so a final backup
-// happens after the last write.
 func (b *Backup) Run(ctx context.Context, checkpoint func(context.Context) error, localPath string) {
 	ticker := time.NewTicker(b.cfg.Interval)
 	defer ticker.Stop()
