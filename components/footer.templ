@@ -1,0 +1,56 @@
+package components
+
+import (
+	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/store"
+)
+
+// Footer renders the site footer with the featured projects passed in
+// from the store.
+templ Footer(featured []store.Project) {
+	<footer class="site-footer">
+		<div class="container">
+			<div class="footer-grid">
+				<div class="footer-brand">
+					<a class="brand" href="/">
+						<span class="logo"><span>AC</span></span>
+						<span>{ data.SiteName }</span>
+					</a>
+					<p>Building software across the stack — from mobile apps to systems programming and developer tools.</p>
+				</div>
+				<div class="footer-links">
+					<div class="footer-col">
+						<h3>Site</h3>
+						<ul>
+							<li><a href="/">Home</a></li>
+							<li><a href="/about">About</a></li>
+							<li><a href="/projects">Projects</a></li>
+							<li><a href="/blog">Blog</a></li>
+							<li><a href="/contact">Contact</a></li>
+						</ul>
+					</div>
+					<div class="footer-col">
+						<h3>Elsewhere</h3>
+						<ul>
+							for _, s := range data.ProfileData.Socials {
+								<li><a href={ s.URL } target="_blank" rel="noopener noreferrer">{ s.Label }</a></li>
+							}
+						</ul>
+					</div>
+					<div class="footer-col">
+						<h3>Popular projects</h3>
+						<ul>
+							for _, p := range featured {
+								<li><a href={ "/projects/" + p.Slug }>{ p.Name }</a></li>
+							}
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div class="footer-bottom">
+				<span>© { currentYear() } { data.SiteName }. Built with care.</span>
+				<span class="stack">Designed & built with care</span>
+			</div>
+		</div>
+	</footer>
+}

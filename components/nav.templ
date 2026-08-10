@@ -1,0 +1,57 @@
+package components
+
+import "github.com/ashu-choudhury/portfolio/data"
+
+// Nav is the sticky site header. The theme toggle is pure HTMX: it issues a
+// GET, the server flips a cookie and replies with an HX-Refresh header.
+templ Nav(active string) {
+	<header class="site-header">
+		<div class="container nav">
+			<a class="brand" href="/" aria-label="Ashu Choudhury — home">
+				<span class="logo"><span>AC</span></span>
+				<span>
+					Ashu Choudhury
+					<small>· { data.SiteRole }</small>
+				</span>
+			</a>
+			<nav class="nav-links" aria-label="Primary">
+				<a href="/" aria-current={ activeIf(active, "home") }>Home</a>
+				<a href="/about" aria-current={ activeIf(active, "about") }>About</a>
+				<a href="/projects" aria-current={ activeIf(active, "projects") }>Projects</a>
+				<a href="/blog" aria-current={ activeIf(active, "blog") }>Blog</a>
+				<a href="/contact" aria-current={ activeIf(active, "contact") }>Contact</a>
+			</nav>
+			<div class="nav-cta">
+				<button class="theme-toggle" hx-get="/theme/toggle" hx-swap="none" aria-label="Toggle color theme" title="Toggle theme">
+					<span class="icon-dark">
+						@Icon("moon", 18)
+					</span>
+					<span class="icon-light">
+						@Icon("sun", 18)
+					</span>
+				</button>
+				<a class="btn btn-primary" href="/contact">Let's talk</a>
+			</div>
+			<details class="mobile-nav">
+				<summary aria-label="Menu">
+					@Icon("menu", 18)
+				</summary>
+				<nav class="mobile-menu" aria-label="Mobile">
+					<a href="/" aria-current={ activeIf(active, "home") }>Home</a>
+					<a href="/about" aria-current={ activeIf(active, "about") }>About</a>
+					<a href="/projects" aria-current={ activeIf(active, "projects") }>Projects</a>
+					<a href="/blog" aria-current={ activeIf(active, "blog") }>Blog</a>
+					<a href="/contact" aria-current={ activeIf(active, "contact") }>Contact</a>
+					<a class="btn btn-primary mobile-cta" href="/contact">Let's talk</a>
+				</nav>
+			</details>
+		</div>
+	</header>
+}
+
+func activeIf(active, name string) string {
+	if active == name {
+		return "page"
+	}
+	return ""
+}

@@ -1,0 +1,232 @@
+package components
+
+import "github.com/ashu-choudhury/portfolio/store"
+
+// ProjectCard is a reusable project card (used on home and projects pages,
+// and returned by the HTMX search endpoint as part of the grid).
+templ ProjectCard(p store.Project) {
+	<article class="card project-card">
+		<a class={ "card-art accent-" + p.Slug } href={ "/projects/" + p.Slug } aria-label={ p.Name + " project page" }>
+			<span class="monogram">{ p.Mono }</span>
+			<span class="year">{ p.Year }</span>
+		</a>
+		<div class="card-body">
+			<div>
+				<h3><a href={ "/projects/" + p.Slug }>{ p.Name }</a></h3>
+				<p class="tagline">{ p.Tagline }</p>
+			</div>
+			<div class="chips">
+				for _, s := range p.Stack {
+					<span class="chip">{ s }</span>
+				}
+			</div>
+			<div class="card-foot">
+				<a class="read-more" href={ "/projects/" + p.Slug }>
+					Read more
+					@Icon("arrow-right", 15)
+				</a>
+				if p.RepoURL != "" {
+					<a class="repo-link" href={ p.RepoURL } target="_blank" rel="noopener noreferrer" aria-label="Source code on GitHub">@Icon("github", 15)
+</a>
+				}
+			</div>
+		</div>
+	</article>
+}
+
+// ProjectGrid is the filterable grid fragment swapped by HTMX search.
+templ ProjectGrid(projects []store.Project, query string) {
+	if len(projects) == 0 {
+		<div class="search-empty">
+			<p>No projects match “{ query }”.</p>
+			<p class="mt-2"><a class="read-more" href="/projects">Clear search</a></p>
+		</div>
+	} else {
+		<div class="project-grid">
+			for _, p := range projects {
+				@ProjectCard(p)
+			}
+		</div>
+	}
+}
+
+// ProjectSearchBox is the HTMX-powered live search input for projects.
+templ ProjectSearchBox(query string) {
+	<div class="search-box">
+		@Icon("search", 17)
+		<input
+			type="search"
+			name="q"
+			value={ query }
+			placeholder="Search projects…"
+			aria-label="Search projects"
+			hx-get="/projects"
+			hx-target="#project-grid"
+			hx-trigger="input changed delay:250ms, search"
+			hx-swap="innerHTML"
+			hx-replace-url="true"
+			hx-indicator="#search-indicator"
+			autocomplete="off"
+		/>
+		<span id="search-indicator" class="htmx-indicator" aria-hidden="true">@Icon("sparkles", 16)
+</span>
+	</div>
+}
+
+// ProjectsPage renders the full projects index.
+templ ProjectsPage(query string, projects []store.Project) {
+	<section class="hero section-pad-sm">
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Open source</span>
+				<h1>Projects</h1>
+				<p>Apps, systems and open-source libraries — built across the stack, sorted by recency.</p>
+			</div>
+			@ProjectSearchBox(query)
+			<div id="project-grid">
+				@ProjectGrid(projects, query)
+			</div>
+		</div>
+	</section>
+}
+
+// ProjectDetailPage renders a single project page.
+templ ProjectDetailPage(p store.Project, next store.Project, readmeHTML, descHTML string) {
+	<section class="section-tight">
+		<div class="container project-hero">
+			<a class="back-link" href="/projects">
+				@Icon("arrow-left", 16)
+				Back to projects
+			</a>
+			<div class="project-title-row">
+				<div>
+					<h1>{ p.Name }</h1>
+					<p class="sub">{ p.Tagline }</p>
+				</div>
+				<span class={ "monogram-big accent-" + p.Slug } aria-hidden="true">{ p.Mono }</span>
+			</div>
+			<div class="project-meta">
+				<div class="meta-item">
+					<span>Year</span>
+					<strong>{ p.Year }</strong>
+				</div>
+				<div class="meta-item">
+					<span>Stack</span>
+					<strong>{ joinComma(p.Stack) }</strong>
+				</div>
+				if p.Source == "local" {
+					<div class="meta-item">
+						<span>Source</span>
+						<strong>Private / local</strong>
+					</div>
+				} else {
+					<div class="meta-item">
+						<span>Source</span>
+						<strong><a href={ p.RepoURL } target="_blank" rel="noopener noreferrer">github.com/ashu-choudhury/{ p.Slug }</a></strong>
+					</div>
+				}
+			</div>
+			if len(p.Links) > 0 {
+				<div class="project-actions">
+					for _, l := range p.Links {
+						<a class="btn btn-primary" href={ l.URL } target="_blank" rel="noopener noreferrer">@Icon(l.Icon, 16) {
+	l.Label 
+}
+</a>
+					}
+				</div>
+			}
+		</div>
+	</section>
+	<section class="pt-0">
+		<div class="container project-body">
+			<div>
+				<h2>About this project</h2>
+				if readmeHTML != "" {
+					<div class="readme-body">
+						@templ.Raw(readmeHTML)
+					</div>
+				} else if descHTML != "" {
+					<div class="readme-body">
+						@templ.Raw(descHTML)
+					</div>
+				} else {
+					<p>{ p.Summary }</p>
+				}
+				if len(p.Features) > 0 {
+					<h2>Key features</h2>
+					<ul class="feature-list">
+						for _, f := range p.Features {
+							<li>@Icon("check", 16)
+<span>{ f }</span></li>
+						}
+					</ul>
+				}
+			</div>
+			<aside>
+				<div class="stack-box">
+					<h2>Technology</h2>
+					<div class="chips">
+						for _, s := range p.Stack {
+							<span class="chip">{ s }</span>
+						}
+					</div>
+				</div>
+				if len(p.Fingerprint) > 0 {
+					<div class="stack-box">
+						<h2>Fingerprint</h2>
+						<div class="chips">
+							for _, f := range p.Fingerprint {
+								<span class="chip">{ f }</span>
+							}
+						</div>
+					</div>
+				}
+				if len(p.Links) > 0 {
+					<div class="links-box">
+						<h2>Links</h2>
+						<ul>
+							for _, l := range p.Links {
+								<li>
+									<a href={ l.URL } target="_blank" rel="noopener noreferrer">
+										<span>@Icon(l.Icon, 16) {
+	l.Label 
+}
+</span>
+										@Icon("external", 15)
+									</a>
+								</li>
+							}
+						</ul>
+					</div>
+				}
+			</aside>
+		</div>
+	</section>
+	<section class="pt-0">
+		<div class="container">
+			<a class="next-project" href={ "/projects/" + next.Slug }>
+				<span>Next project</span>
+				<strong>
+					{ next.Name }
+					@Icon("arrow-right", 18)
+				</strong>
+			</a>
+			<p class="text-center mt-2">
+				<a class="read-more" href="/projects">Browse all projects</a>
+			</p>
+		</div>
+	</section>
+}
+
+// joinComma joins a slice into a comma-separated string.
+func joinComma(items []string) string {
+	out := ""
+	for i, s := range items {
+		if i > 0 {
+			out += ", "
+		}
+		out += s
+	}
+	return out
+}

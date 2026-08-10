@@ -1,0 +1,26 @@
+# Build artifacts
+/portfolio
+/portfolio.exe
+
+# Local runtime files
+*.log
+server.log
+.server_port
+.server_pid
+.freebuff/
+
+# Secrets — never commit these
+.env
+.env.local
+.env.*
+!.env.example
+
+# Persisted data (runtime state — back it up to S3, don't commit it)
+storage/persisted/
+*.db
+*.db-shm
+*.db-wal
+
+# Go
+*.test
+storage/persisted/www/

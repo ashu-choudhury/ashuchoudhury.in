@@ -1,0 +1,13 @@
+# Keep secrets and local state out of the image and build context.
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+storage/persisted/
+server.log
+portfolio
+portfolio.exe
+.git
+.freebuff

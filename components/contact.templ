@@ -1,0 +1,87 @@
+package components
+
+import "github.com/ashu-choudhury/portfolio/data"
+
+// ContactPage renders the contact page. The form posts via HTMX and the
+// server returns a FormResult fragment, so there is no full-page reload.
+// initial may be nil; when non-nil (e.g. after a non-JS POST redirect) it
+// is rendered into the form result slot.
+templ ContactPage(initial templ.Component) {
+	<section class="hero section-pad-sm">
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Contact</span>
+				<h1>Let's build something together.</h1>
+				<p>Open to collaboration, contribution and interesting problems. Tell me what you're working on.</p>
+			</div>
+		</div>
+	</section>
+	<section class="pt-0">
+		<div class="container contact-grid">
+			<div class="contact-info">
+				<p>Prefer async? Find me on GitHub or the package registries — or drop a message below and I'll get back to you.</p>
+				<div class="contact-channels">
+					for _, s := range data.ProfileData.Socials {
+						<a href={ s.URL } target="_blank" rel="noopener noreferrer">
+							@Icon(s.Icon, 19)
+							<span>{ s.Label }</span>
+							@Icon("external", 15)
+						</a>
+					}
+				</div>
+			</div>
+			<form class="contact-form" hx-post="/contact" hx-target="#form-result" hx-swap="innerHTML" hx-indicator="#send-indicator" novalidate>
+				<h2>Send a message</h2>
+				<div class="form-field">
+					<label for="name">Name</label>
+					<input id="name" name="name" type="text" required maxlength="80" autocomplete="name" placeholder="Your name"/>
+				</div>
+				<div class="form-field">
+					<label for="email">Email</label>
+					<input id="email" name="email" type="email" required maxlength="120" autocomplete="email" placeholder="you@example.com"/>
+				</div>
+				<div class="form-field">
+					<label for="message">Message</label>
+					<textarea id="message" name="message" required maxlength="2000" placeholder="What are you building?"></textarea>
+				</div>
+				<div class="form-field">
+					<button class="btn btn-primary" type="submit">
+						Send message
+						@Icon("send", 16)
+						<span id="send-indicator" class="htmx-indicator" aria-hidden="true">
+							@Icon("sparkles", 16)
+						</span>
+					</button>
+					<span class="form-note">Direct delivery — typically responded to within 24 hours.</span>
+				</div>
+				<div id="form-result" role="status" aria-live="polite">
+					if initial != nil {
+						@initial
+					}
+				</div>
+			</form>
+		</div>
+	</section>
+}
+
+// FormResultOk is the HTMX fragment returned after a successful submission.
+templ FormResultOk() {
+	<div class="form-msg ok">
+		@Icon("check-circle", 17)
+		<div>
+			<strong>Message sent — thanks!</strong>
+			<p class="form-note">I'll get back to you as soon as I can. Meanwhile, feel free to browse the projects.</p>
+		</div>
+	</div>
+}
+
+// FormResultErr is the HTMX fragment returned when validation fails.
+templ FormResultErr(msg string) {
+	<div class="form-msg err">
+		@Icon("alert", 17)
+		<div>
+			<strong>Couldn't send that.</strong>
+			<p class="form-note">{ msg }</p>
+		</div>
+	</div>
+}

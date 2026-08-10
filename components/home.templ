@@ -1,0 +1,132 @@
+package components
+
+import (
+	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/store"
+)
+
+// Home renders the landing page with the featured projects passed in
+// from the store.
+templ Home(featured []store.Project) {
+	<section class="hero">
+		<div class="container hero-grid">
+			<div class="hero-copy">
+				<h1 class="reveal">
+					Hi, I'm <span class="gradient-text">{ data.SiteName }</span>.
+					<br/>
+					I turn complex problems into elegant software.
+				</h1>
+				<p class="lead reveal reveal-1">
+					An <strong>Android & full-stack developer</strong> who builds at every level —
+					apps, systems, backends and <strong>AI-powered tooling</strong> —
+					from the binary up to the API, and from the API up to the UI.
+				</p>
+				<div class="hero-actions reveal reveal-2">
+					<a class="btn btn-primary" href="/projects">
+						View projects
+						@Icon("arrow-right", 16)
+					</a>
+					<a class="btn btn-ghost" href="/about">More about me</a>
+				</div>
+			</div>
+			<div class="terminal reveal reveal-2" aria-hidden="true">
+				<div class="terminal-bar">
+					<span class="dot"></span>
+					<span class="dot"></span>
+					<span class="dot"></span>
+					<span class="title">portfolio — zsh</span>
+				</div>
+				<div class="terminal-body">
+					<div><span class="prompt">$</span> <span class="dim">templ generate</span> <span class="ok">✔ done</span></div>
+					<div><span class="prompt">$</span> <span class="dim">go build -o portfolio</span> <span class="ok">✔ done</span></div>
+					<div><span class="prompt">$</span> <span class="dim">go:embed static</span> <span class="ok">✔ bundled</span></div>
+					<div><span class="prompt">$</span> <span class="dim">./portfolio --port 8080</span></div>
+					<div><span class="ok">✔ serving</span> <span class="dim">https://{ data.SiteDomain } on :8080</span></div>
+					<div><span class="prompt">$</span> <span class="cursor"></span></div>
+				</div>
+			</div>
+		</div>
+	</section>
+	<section id="about-teaser">
+		<div class="container about-grid">
+			<div class="about-copy">
+				<div class="section-head">
+					<span class="eyebrow">About me</span>
+					<h2>Software that matters — for problems others overlook.</h2>
+				</div>
+				for _, para := range data.ProfileData.Bio {
+					<p>{ para }</p>
+				}
+				<div class="hero-actions">
+					<a class="btn btn-ghost" href="/about">
+						Read the full story
+						@Icon("arrow-right", 16)
+					</a>
+				</div>
+			</div>
+			<ul class="highlights">
+				for _, h := range data.ProfileData.Highlights {
+					<li>
+						@Icon("check-circle", 18)
+						<span>{ h }</span>
+					</li>
+				}
+			</ul>
+		</div>
+	</section>
+	<section id="featured">
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Featured work</span>
+				<h2>Projects that ship</h2>
+				<p>Open-source libraries and tools — published to npm and pub.dev, built to be used.</p>
+			</div>
+			<div class="project-grid">
+				for _, p := range featured {
+					@ProjectCard(p)
+				}
+			</div>
+			<div class="hero-actions mt-2">
+				<a class="btn btn-primary" href="/projects">
+					See all projects
+					@Icon("arrow-right", 16)
+				</a>
+			</div>
+		</div>
+	</section>
+	<section id="skills-home">
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Toolbox</span>
+				<h2>Languages & platforms</h2>
+			</div>
+			<div class="skills-grid">
+				for _, g := range data.ProfileData.Skills {
+					<div class="card skill-card">
+						<div class="skill-head">
+							@Icon(g.Icon, 20)
+							<h3>{ g.Title }</h3>
+						</div>
+						<ul>
+							for _, s := range g.Skills {
+								<li class="chip">{ s }</li>
+							}
+						</ul>
+					</div>
+				}
+			</div>
+		</div>
+	</section>
+	<section id="cta">
+		<div class="container">
+			<div class="cta-banner">
+				<h2>Have an idea worth building?</h2>
+				<p>Open to collaboration and contribution. Let's build something that matters.</p>
+				<a class="btn" href="/contact">
+					Get in touch
+					@Icon("send", 16)
+				</a>
+			</div>
+		</div>
+	</section>
+}

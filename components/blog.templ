@@ -1,0 +1,116 @@
+package components
+
+import (
+	"time"
+
+	"github.com/ashu-choudhury/portfolio/store"
+)
+
+// BlogIndex renders the blog listing with an HTMX-powered search box.
+templ BlogIndex(posts []store.Post, query string) {
+	<section class="hero section-pad-sm">
+		<div class="container">
+			<div class="section-head">
+				<div class="flex-between">
+					<span class="eyebrow">Blog</span>
+					<a class="rss-link" href="/blog/feed.xml" target="_blank" rel="noopener noreferrer" title="Subscribe to RSS feed">
+						@Icon("rss", 15)
+						<span>RSS Feed</span>
+					</a>
+				</div>
+				<h1>Writing</h1>
+				<p>Thoughts, notes, and lessons learned along the way — on engineering, building software, and things I'm curious about.</p>
+			</div>
+			<div class="search-box">
+				@Icon("search", 17)
+				<input
+					type="search"
+					name="q"
+					value={ query }
+					placeholder="Search posts…"
+					aria-label="Search posts"
+					hx-get="/blog/search"
+					hx-target="#blog-list"
+					hx-trigger="input changed delay:250ms, search"
+					hx-swap="innerHTML"
+					hx-replace-url="true"
+					autocomplete="off"
+				/>
+			</div>
+			<div id="blog-list">
+				@BlogList(posts)
+			</div>
+		</div>
+	</section>
+}
+
+// BlogList is the post list fragment swapped by HTMX search.
+templ BlogList(posts []store.Post) {
+	if len(posts) == 0 {
+		<div class="search-empty">
+			<p>No posts found.</p>
+		</div>
+	} else {
+		<div class="blog-list">
+			for _, p := range posts {
+				<article class="card blog-card">
+					<a class="blog-card-link" href={ "/blog/" + p.Slug }>
+						<div>
+							<h2>{ p.Title }</h2>
+							<p class="blog-summary">{ p.Summary }</p>
+						</div>
+						<div class="blog-meta">
+							<time datetime={ isoDate(p.PublishedAt) }>{ prettyDate(p.PublishedAt) }</time>
+							if len(p.Tags) > 0 {
+								<span class="chips">
+									for _, t := range p.Tags {
+										<span class="chip">{ t }</span>
+									}
+								</span>
+							}
+						</div>
+					</a>
+				</article>
+			}
+		</div>
+	}
+}
+
+// BlogPostPage renders a single post with pre-rendered HTML content.
+templ BlogPostPage(p store.Post, html string) {
+	<section class="project-hero">
+		<div class="container">
+			<a class="back" href="/blog">
+				@Icon("arrow-left", 15)
+				All posts
+			</a>
+			<div class="section-head">
+				<span class="eyebrow">{ prettyDate(p.PublishedAt) }</span>
+				<h1>{ p.Title }</h1>
+				<p>{ p.Summary }</p>
+			</div>
+			<div class="blog-body">
+				@templ.Raw(html)
+			</div>
+			<p class="text-center mt-2">
+				<a class="read-more" href="/blog">More posts</a>
+			</p>
+		</div>
+	</section>
+}
+
+// isoDate formats a time as an ISO-8601 date.
+func isoDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02")
+}
+
+// prettyDate formats a time as e.g. "12 Aug 2026".
+func prettyDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2 Jan 2006")
+}

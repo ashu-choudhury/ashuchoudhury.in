@@ -1,0 +1,128 @@
+package components
+
+import (
+	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/store"
+)
+
+// AboutPage renders the about page. featured projects come from the store.
+templ AboutPage(featured []store.Project) {
+	<section class="hero section-pad-sm">
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">About</span>
+				<h1>About Me & My Story</h1>
+				<p>An { data.SiteRole }, { data.Age() } years old and self-taught from the start — who believes the best tools are the ones people forget they're using, and who likes building them from the app down to the binary.</p>
+			</div>
+		</div>
+	</section>
+	<section class="pt-0">
+		<div class="container about-grid">
+			<div class="about-copy">
+				<div class="section-head">
+					<h2>Curious, hands-on, and comfortable at every level.</h2>
+				</div>
+				for _, para := range data.ProfileData.Bio {
+					<p>{ para }</p>
+				}
+			</div>
+			<ul class="highlights">
+				for _, h := range data.ProfileData.Highlights {
+					<li>
+						@Icon("check-circle", 18)
+						<span>{ h }</span>
+					</li>
+				}
+			</ul>
+		</div>
+	</section>
+	<section>
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">The story</span>
+				<h2>My programming story</h2>
+			</div>
+			<div class="about-story">
+				for _, para := range data.Story() {
+					<p>{ para }</p>
+				}
+			</div>
+		</div>
+	</section>
+	<section>
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Work experience</span>
+				<h2>Where I've worked</h2>
+			</div>
+			<div class="experience-list">
+				for _, w := range data.ProfileData.Work {
+					<div class="experience-item">
+						<span class="experience-dot" aria-hidden="true"></span>
+						<div class="experience-body">
+							<div class="experience-head">
+								<h3>{ w.Title }</h3>
+								<span class="chip">{ w.Org } · { w.Period }</span>
+							</div>
+							<p>{ w.Summary }</p>
+							if len(w.Points) > 0 {
+								<ul class="experience-points">
+									for _, pt := range w.Points {
+										<li>
+											@Icon("check", 15)
+											<span>{ pt }</span>
+										</li>
+									}
+								</ul>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	</section>
+	<section>
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">What I know</span>
+				<h2>Skills & technologies</h2>
+				<p>Languages, platforms, frameworks and runtimes I work with.</p>
+			</div>
+			<div class="skills-grid">
+				for _, g := range data.ProfileData.Skills {
+					<div class="card skill-card">
+						<div class="skill-head">
+							@Icon(g.Icon, 20)
+							<h3>{ g.Title }</h3>
+						</div>
+						<ul>
+							for _, s := range g.Skills {
+								<li class="chip">{ s }</li>
+							}
+						</ul>
+					</div>
+				}
+			</div>
+		</div>
+	</section>
+	<section>
+		<div class="container">
+			<div class="section-head">
+				<span class="eyebrow">Projects</span>
+				<h2>Selected work</h2>
+				<p>A few of the things I've built — including the Blind Tech Community product line.</p>
+			</div>
+			<div class="project-grid">
+				for _, p := range featured {
+					@ProjectCard(p)
+				}
+			</div>
+			<div class="hero-actions mt-2">
+				<a class="btn btn-primary" href="/projects">
+					See all projects
+					@Icon("arrow-right", 16)
+				</a>
+			</div>
+		</div>
+	</section>
+}

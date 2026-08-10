@@ -1,0 +1,50 @@
+# Local / self-hosted deployment. Nothing here is required for the site to
+# run — it just makes a single-command deploy (and local S3 testing) easy.
+#
+#   docker compose up -d                      # site only
+#   docker compose --profile minio up -d      # site + local MinIO (S3 testing)
+#
+# All configuration comes from the environment — see .env.example.
+services:
+  portfolio:
+    build: .
+    image: ashu-portfolio:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      DB_PATH: /storage/persisted/portfolio.db
+      SITE_URL: ${SITE_URL:-https://ashuchoudhury.in}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # S3 backup (leave unset to disable; MinIO profile sets these for testing)
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_PREFIX: ${S3_PREFIX:-portfolio/}
+      S3_INTERVAL: ${S3_INTERVAL:-300}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - portfolio-data:/storage
+
+  # Optional local S3-compatible storage for testing backups before using
+  # real AWS/R2/MinIO. Enable with: docker compose --profile minio up -d
+  minio:
+    image: minio/minio:latest
+    profile: ["minio"]
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+
+volumes:
+  portfolio-data:
+  minio-data:

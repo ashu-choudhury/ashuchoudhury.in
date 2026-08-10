@@ -1,0 +1,65 @@
+package components
+
+import (
+	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/store"
+)
+
+// Head renders the full SEO-optimized <head> for a page.
+templ Head(page data.PageMeta) {
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<title>{ page.Title }</title>
+	<meta name="description" content={ page.Description }/>
+	if page.NoIndex {
+		<meta name="robots" content="noindex, nofollow"/>
+	} else {
+		<meta name="robots" content="index, follow, max-image-preview:large"/>
+	}
+	<link rel="canonical" href={ page.Canonical }/>
+	<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+	<meta name="theme-color" content="#0b1120"/>
+	<!-- Open Graph -->
+	<meta property="og:site_name" content={ data.SiteName }/>
+	<meta property="og:type" content={ page.Type }/>
+	<meta property="og:title" content={ page.Title }/>
+	<meta property="og:description" content={ page.Description }/>
+	<meta property="og:url" content={ page.Canonical }/>
+	<meta property="og:image" content={ data.URL(page.Image) }/>
+	<meta property="og:image:width" content="1200"/>
+	<meta property="og:image:height" content="630"/>
+	<meta property="og:locale" content="en_US"/>
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary_large_image"/>
+	<meta name="twitter:title" content={ page.Title }/>
+	<meta name="twitter:description" content={ page.Description }/>
+	<meta name="twitter:image" content={ data.URL(page.Image) }/>
+	<!-- Structured data -->
+	if page.JSONLD != "" {
+		@templ.Raw(ldScript(page.JSONLD))
+	}
+	<link rel="stylesheet" href="/static/css/style.css"/>
+	<link rel="preload" href="/static/htmx.min.js" as="script"/>
+	<script src="/static/htmx.min.js" defer></script>
+	<script src="/static/htmx-config.js" defer></script>
+}
+
+// BaseLayout wraps a page's content with the document, header and footer.
+// hx-boost progressively enhances plain links into HTML-over-the-wire
+// navigation: the first request is always full server-rendered HTML.
+templ BaseLayout(page data.PageMeta, content templ.Component, featured []store.Project) {
+	<!DOCTYPE html>
+	<html lang="en" data-theme={ page.Theme }>
+		<head>
+			@Head(page)
+		</head>
+		<body hx-boost="true">
+			<a class="skip-link" href="#main">Skip to content</a>
+			@Nav(page.Active)
+			<main id="main">
+				@content
+			</main>
+			@Footer(featured)
+		</body>
+	</html>
+}
