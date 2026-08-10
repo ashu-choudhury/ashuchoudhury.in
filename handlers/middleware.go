@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const sessionCookie = "session"
+const csrfCookieName = "csrf_token"
 
 // ---------------------------------------------------------------------------
 // Security headers
@@ -116,12 +118,41 @@ func (s *Server) adminOnly(next http.Handler) http.Handler {
 	})
 }
 
-// csrfGuard validates the csrf field on admin POST requests. The preview
-// endpoint is stateless (renders markdown only) and is exempt.
+// csrfGuard validates the csrf field on admin POST requests. Supports double-submit
+// cookies so CSRF protection works reliably across multi-instance serverless containers.
 func (s *Server) csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := ""
+		if cookie, err := r.Cookie(csrfCookieName); err == nil && cookie.Value != "" {
+			token = cookie.Value
+		} else {
+			token = randomHexToken(24)
+			http.SetCookie(w, &http.Cookie{
+				Name:     csrfCookieName,
+				Value:    token,
+				Path:     "/",
+				SameSite: http.SameSiteLaxMode,
+			})
+		}
+
+		components.SetCSRFToken(token)
+
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/admin") && r.URL.Path != "/admin/posts/preview" {
-			if !csrfOK(r.FormValue("csrf")) {
+			if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+				_ = r.ParseMultipartForm(32 << 20)
+			} else {
+				_ = r.ParseForm()
+			}
+
+			given := r.FormValue("csrf")
+			if given == "" {
+				given = r.Header.Get("X-CSRF-Token")
+			}
+			if given == "" {
+				given = r.Header.Get("HX-CSRF-Token")
+			}
+
+			if given == "" || (subtle.ConstantTimeCompare([]byte(given), []byte(token)) != 1 && !csrfOKLegacy(given)) {
 				http.Error(w, "invalid or missing CSRF token", http.StatusForbidden)
 				return
 			}
@@ -130,8 +161,8 @@ func (s *Server) csrfGuard(next http.Handler) http.Handler {
 	})
 }
 
-func csrfOK(given string) bool {
-	return subtle.ConstantTimeCompare([]byte(given), []byte(csrfToken())) == 1
+func csrfOKLegacy(given string) bool {
+	return subtle.ConstantTimeCompare([]byte(given), []byte(csrfTokenGlobal)) == 1
 }
 
 // sessionToken extracts the admin session cookie value.
@@ -209,13 +240,15 @@ func (s *Server) loginAllowed(ip string) bool {
 func csrfToken() string { return csrfTokenGlobal }
 
 // csrfTokenGlobal is set once at startup.
-var csrfTokenGlobal = func() string {
-	b := make([]byte, 24)
+func randomHexToken(n int) string {
+	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
 	}
 	return hex.EncodeToString(b)
-}()
+}
+
+var csrfTokenGlobal = randomHexToken(24)
 
 // rctx returns a background context for store calls.
 func rctx() context.Context { return context.Background() }
