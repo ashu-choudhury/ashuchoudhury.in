@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ashu-choudhury/portfolio/components"
@@ -84,10 +85,22 @@ func (s *Server) staticHandler() http.Handler {
 }
 
 // filesHandler serves public uploads directly from storage/persisted/www.
+// If a file is missing locally, it lazy-restores it from S3 on demand.
 func (s *Server) filesHandler() http.Handler {
 	wwwDir := filepath.Join("storage", "persisted", "www")
 	_ = os.MkdirAll(wwwDir, 0755)
-	return http.StripPrefix("/files/", http.FileServer(http.Dir(wwwDir)))
+	fileServer := http.StripPrefix("/files/", http.FileServer(http.Dir(wwwDir)))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		relPath := strings.TrimPrefix(r.URL.Path, "/files/")
+		localPath := filepath.Join(wwwDir, filepath.FromSlash(relPath))
+
+		if _, err := os.Stat(localPath); os.IsNotExist(err) && s.backup != nil {
+			_ = s.backup.RestoreFile(r.Context(), relPath, localPath)
+		}
+
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // Handler returns the fully-wired http.Handler.

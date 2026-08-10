@@ -163,6 +163,35 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 	return nil
 }
 
+// RestoreFile fetches a single missing public file from S3 on-demand.
+func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) error {
+	s3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(b.cfg.Bucket),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		return err
+	}
+	defer out.Body.Close()
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return err
+	}
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := ioCopy(f, out.Body); err != nil {
+		return err
+	}
+	b.log.Printf("s3: lazy-restored missing file %s -> %s", s3Key, targetPath)
+	return nil
+}
+
 // Backup checkpoints the database and uploads all files inside storage/persisted/ to S3.
 func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) error, localPath string) error {
 	if checkpoint != nil {

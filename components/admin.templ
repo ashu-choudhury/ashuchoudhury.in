@@ -598,7 +598,7 @@ templ AdminFilesView(relDir string, files []FileInfo, msg, errMsg string) {
 				<input type="hidden" name="csrf" value={ csrfValue() }/>
 				<input type="hidden" name="dir" value={ relDir }/>
 				<div class="form-field">
-					<label for="file">Choose file (unlimited size)</label>
+					<label for="file">Choose file</label>
 					<input id="file" name="file" type="file" required/>
 				</div>
 				<button class="btn btn-primary" type="submit">
