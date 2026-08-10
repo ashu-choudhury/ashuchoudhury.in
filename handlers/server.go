@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/storage"
 	"github.com/ashu-choudhury/portfolio/store"
 )
 
@@ -24,6 +26,30 @@ type Server struct {
 	loginHits map[string][]time.Time
 	adminUser string
 	adminHash []byte
+	backup    *storage.Backup
+	dbPath    string
+}
+
+// SetBackup attaches the S3 backup pipeline to the server for instant write sync.
+func (s *Server) SetBackup(b *storage.Backup, dsn string) {
+	s.backup = b
+	s.dbPath = dsn
+}
+
+// TriggerBackup performs an immediate WAL checkpoint and S3 backup after admin edits.
+func (s *Server) TriggerBackup(ctx context.Context) {
+	if s.backup != nil {
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_ = s.backup.Backup(bgCtx, func(c context.Context) error {
+				if sqliteStore, ok := s.Store.(*store.SQLite); ok {
+					return sqliteStore.Checkpoint(c)
+				}
+				return nil
+			}, s.dbPath)
+		}()
+	}
 }
 
 // New builds a Server with the given store and static filesystem, applies

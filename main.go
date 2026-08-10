@@ -140,6 +140,9 @@ func main() {
 	// ------------------------------------------------------------------
 	// Routes + middleware.
 	server := handlers.New(db, staticSub)
+	if backup != nil {
+		server.SetBackup(backup, dsn)
+	}
 
 	addr := os.Getenv("PORT")
 	if addr == "" {

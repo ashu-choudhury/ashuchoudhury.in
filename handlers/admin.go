@@ -195,6 +195,7 @@ func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
 			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body)))
 		return
 	}
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
 }
 
@@ -205,6 +206,7 @@ func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.Store.DeletePost(r.Context(), id)
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
 }
 
@@ -393,6 +395,7 @@ func (s *Server) handleAdminProjectSave(w http.ResponseWriter, r *http.Request) 
 			components.AdminProjectForm(p, isNew, "Could not save project.", renderMarkdown(p.Description)))
 		return
 	}
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/projects", http.StatusSeeOther)
 }
 
@@ -401,6 +404,7 @@ func (s *Server) handleAdminProjectDelete(w http.ResponseWriter, r *http.Request
 	if err := s.Store.DeleteProject(r.Context(), slug); err != nil {
 		log.Printf("admin delete project %s: %v", slug, err)
 	}
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/projects", http.StatusSeeOther)
 }
 
@@ -549,6 +553,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	_ = s.Store.SetSetting(r.Context(), settingsTitle, title)
 	_ = s.Store.SetSetting(r.Context(), settingsDesc, desc)
 	data.SetSiteIdentity(title, desc)
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/settings?saved=1", http.StatusSeeOther)
 }
 
@@ -641,6 +646,7 @@ func (s *Server) handleAdminFilesUpload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Uploaded "+cleanName+" successfully"), http.StatusSeeOther)
 }
 
@@ -666,6 +672,7 @@ func (s *Server) handleAdminFilesDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Deleted successfully"), http.StatusSeeOther)
 }
 
