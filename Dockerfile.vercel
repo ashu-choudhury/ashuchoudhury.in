@@ -1,0 +1,31 @@
+# Build stage: compile the Go portfolio binary.
+FROM golang:1.24-alpine AS build
+
+WORKDIR /src
+
+# Cache Go dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy application source and compile
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/portfolio .
+
+# ---------------------------------------------------------------------------
+# Runtime stage: Lightweight Alpine container for Vercel Container Runtime.
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY --from=build /out/portfolio /usr/local/bin/portfolio
+
+# Create local storage layout for SQLite database and uploaded files
+RUN mkdir -p /storage/persisted /storage/persisted/www
+
+ENV PORT=80 \
+    DB_PATH=/storage/persisted/portfolio.db \
+    SITE_URL=https://ashuchoudhury.in
+
+EXPOSE 80
+
+ENTRYPOINT ["/usr/local/bin/portfolio"]
