@@ -1,79 +1,62 @@
 # ashuchoudhury.in
 
-My website created using Go + HTMX.
+> My website created using Go + HTMX.
 
-🔗 **[Visit site](https://ashuchoudhury.in)**
+🌐 **[Visit site](https://ashuchoudhury.in)**
 
 ---
 
-## ⚡ Overview
+## About
 
-A high-performance, single-binary personal website and portfolio built with **Go + Templ + HTMX**: strongly-typed server-rendered HTML, HTML-over-the-wire interactivity, and zero client-authored JavaScript — all compiled into a single executable with embedded static assets.
+This is the source code for my personal website and portfolio. It is designed to be fast, lightweight, and single-binary server-rendered application with zero client-authored JavaScript.
 
 ### Features
-- **Public Website**: Home, About, Projects, Blog (with FTS5 full-text search & RSS feed at `/blog/feed.xml`), and Contact.
-- **Server-Side Live GitHub README Fetching**: Renders repository `README.md` dynamically on project detail pages.
-- **Admin Panel (`/admin`)**: Dashboard with zero-JS SVG analytics chart, Markdown blog editor with live preview, message inbox, project curation, and site settings.
-- **File Manager (`/admin/files`)**: Upload, browse, and delete files inside `storage/persisted/www` with public streaming at `/files/*` (unlimited file size support & HTTP Range streaming).
-- **Public Domain**: Completely open-source under [The Unlicense](LICENSE).
+- 🚀 **Fast & Lightweight**: Server-rendered HTML with HTMX over the wire.
+- 🎨 **Clean Aesthetics**: Modern typography, responsive design system, dark and light theme toggle.
+- 📝 **Blog**: Built-in Markdown articles with full-text search and RSS feed.
+- 💻 **Projects**: Live Showcase of open-source projects with dynamic README rendering.
+- 🛠️ **Admin Panel**: Lightweight content management system to publish posts, manage projects, and manage public files.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Backend**: Go (standard library `net/http`)
-- **Templating**: [Templ](https://templ.guide) (type-safe HTML templates in Go)
-- **Frontend Interactivity**: [HTMX 2.0](https://htmx.org) (self-hosted, zero JavaScript dependencies)
-- **Styling**: Modern Vanilla CSS3 (Custom Properties, Flexbox & Grid layout)
-- **Database**: SQLite (pure-Go via `modernc.org/sqlite` — zero CGO dependencies)
-- **File Storage**: Local persistent disk `storage/persisted/www` with optional S3-compatible automated backups
+- **Backend**: Go (Standard Library `net/http`)
+- **Templating**: [Templ](https://templ.guide) (Type-safe HTML templates in Go)
+- **Frontend Interactivity**: [HTMX 2.0](https://htmx.org)
+- **Database**: SQLite
+- **Styling**: Vanilla CSS3
 
 ---
 
-## 🚀 Quick Start
+## Local Development
 
 ### Prerequisites
 - [Go 1.22+](https://go.dev)
-- [templ CLI](https://templ.guide)
+- [Templ CLI](https://templ.guide)
 
 ```bash
 go install github.com/a-h/templ/cmd/templ@latest
 ```
 
-### Build & Run Locally
+### Running Locally
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/ashu-choudhury/ashuchoudhury.in.git
 cd ashuchoudhury.in
 
-# 2. Generate Templ components
+# Generate Templ components
 templ generate
 
-# 3. Build single binary
-go build -o portfolio .
-
-# 4. Start the server
-ADMIN_PASSWORD=admin ./portfolio
+# Run the server
+ADMIN_PASSWORD=admin go run main.go
 ```
 
-Open <http://localhost:8080> in your browser. The Admin Panel is available at <http://localhost:8080/admin>.
+Open `http://localhost:8080` in your browser.
 
 ---
 
-## ⚙️ Environment Variables
+## License
 
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `PORT` | `8080` | HTTP server port |
-| `SITE_URL` | `https://ashuchoudhury.in` | Canonical site URL |
-| `DB_PATH` | `storage/persisted/portfolio.db` | SQLite database file location |
-| `ADMIN_USER` | `admin` | Admin panel username |
-| `ADMIN_PASSWORD` | `admin` | Admin panel password |
-| `S3_BUCKET` | *(disabled)* | S3 bucket name (enables automated SQLite backups) |
-
----
-
-## 📜 License
-
-This project is released into the public domain under **[The Unlicense](LICENSE)**. You are free to copy, modify, distribute, or use this code for any purpose, commercial or non-commercial.
+This project is released into the public domain under **[The Unlicense](LICENSE)**. Feel free to use the code for your own website or projects.
