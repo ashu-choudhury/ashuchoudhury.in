@@ -577,33 +577,54 @@ func sanitizeRelPath(rel string) string {
 
 func (s *Server) handleAdminFiles(w http.ResponseWriter, r *http.Request) {
 	relDir := sanitizeRelPath(r.URL.Query().Get("dir"))
-	root := wwwDirRoot()
-	targetDir := filepath.Join(root, relDir)
-	_ = os.MkdirAll(targetDir, 0755)
-
-	entries, err := os.ReadDir(targetDir)
-	if err != nil {
-		log.Printf("admin files list %s: %v", targetDir, err)
-	}
 
 	var files []components.FileInfo
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		itemRelPath := filepath.Join(relDir, entry.Name())
-		urlPath := strings.ReplaceAll(itemRelPath, "\\", "/")
-		publicURL := "/files/" + urlPath
 
-		files = append(files, components.FileInfo{
-			Name:      entry.Name(),
-			RelPath:   itemRelPath,
-			PublicURL: publicURL,
-			Size:      fmtSizeBytes(info.Size()),
-			IsDir:     entry.IsDir(),
-			ModTime:   info.ModTime().Format("02 Jan 2006 15:04"),
-		})
+	if s.backup != nil {
+		// Zero-disk: list directly from S3 bucket (portfolio/www/<dir>)
+		s3Files, err := s.backup.ListPublicFiles(r.Context(), relDir)
+		if err != nil {
+			log.Printf("admin files list s3 error %s: %v", relDir, err)
+		}
+		for _, f := range s3Files {
+			files = append(files, components.FileInfo{
+				Name:      f.Name,
+				RelPath:   f.RelPath,
+				PublicURL: f.PublicURL,
+				Size:      f.Size,
+				IsDir:     f.IsDir,
+				ModTime:   f.ModTime,
+			})
+		}
+	} else {
+		// Local disk fallback if S3 is not configured
+		root := wwwDirRoot()
+		targetDir := filepath.Join(root, relDir)
+		_ = os.MkdirAll(targetDir, 0755)
+
+		entries, err := os.ReadDir(targetDir)
+		if err != nil {
+			log.Printf("admin files list local %s: %v", targetDir, err)
+		}
+
+		for _, entry := range entries {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			itemRelPath := filepath.Join(relDir, entry.Name())
+			urlPath := strings.ReplaceAll(itemRelPath, "\\", "/")
+			publicURL := "/files/" + urlPath
+
+			files = append(files, components.FileInfo{
+				Name:      entry.Name(),
+				RelPath:   itemRelPath,
+				PublicURL: publicURL,
+				Size:      fmtSizeBytes(info.Size()),
+				IsDir:     entry.IsDir(),
+				ModTime:   info.ModTime().Format("02 Jan 2006 15:04"),
+			})
+		}
 	}
 
 	msg := r.URL.Query().Get("msg")
@@ -614,7 +635,7 @@ func (s *Server) handleAdminFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminFilesUpload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB RAM buffer, unlimited total upload size (buffered to temp disk)
+	if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB RAM buffer
 		http.Redirect(w, r, "/admin/files?err="+url.QueryEscape("Upload failed: "+err.Error()), http.StatusSeeOther)
 		return
 	}
@@ -628,25 +649,40 @@ func (s *Server) handleAdminFilesUpload(w http.ResponseWriter, r *http.Request) 
 	defer file.Close()
 
 	cleanName := filepath.Base(header.Filename)
-	targetDir := filepath.Join(wwwDirRoot(), relDir)
-	_ = os.MkdirAll(targetDir, 0755)
-	destPath := filepath.Join(targetDir, cleanName)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		log.Printf("admin upload save %s: %v", destPath, err)
-		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not save uploaded file"), http.StatusSeeOther)
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		log.Printf("admin upload copy %s: %v", destPath, err)
-		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Error writing file content"), http.StatusSeeOther)
-		return
+	targetRel := cleanName
+	if relDir != "" {
+		targetRel = relDir + "/" + cleanName
 	}
 
-	s.TriggerBackup(r.Context())
+	if s.backup != nil {
+		// Zero-disk: stream upload directly to S3
+		contentType := header.Header.Get("Content-Type")
+		if err := s.backup.UploadPublicFile(r.Context(), targetRel, file, header.Size, contentType); err != nil {
+			log.Printf("admin upload s3 error %s: %v", targetRel, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Upload failed: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+	} else {
+		// Local disk fallback if S3 is not configured
+		targetDir := filepath.Join(wwwDirRoot(), relDir)
+		_ = os.MkdirAll(targetDir, 0755)
+		destPath := filepath.Join(targetDir, cleanName)
+
+		dst, err := os.Create(destPath)
+		if err != nil {
+			log.Printf("admin upload save %s: %v", destPath, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not save uploaded file"), http.StatusSeeOther)
+			return
+		}
+		defer dst.Close()
+
+		if _, err := io.Copy(dst, file); err != nil {
+			log.Printf("admin upload copy %s: %v", destPath, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Error writing file content"), http.StatusSeeOther)
+			return
+		}
+	}
+
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Uploaded "+cleanName+" successfully"), http.StatusSeeOther)
 }
 
@@ -658,21 +694,30 @@ func (s *Server) handleAdminFilesDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	root := wwwDirRoot()
-	targetPath := filepath.Join(root, relPath)
+	if s.backup != nil {
+		// Zero-disk: delete directly from S3
+		if err := s.backup.DeletePublicFile(r.Context(), relPath); err != nil {
+			log.Printf("admin delete s3 error %s: %v", relPath, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Delete failed: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+	} else {
+		// Local disk fallback
+		root := wwwDirRoot()
+		targetPath := filepath.Join(root, relPath)
 
-	if !strings.HasPrefix(targetPath, root) {
-		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Permission denied"), http.StatusSeeOther)
-		return
+		if !strings.HasPrefix(targetPath, root) {
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Permission denied"), http.StatusSeeOther)
+			return
+		}
+
+		if err := os.RemoveAll(targetPath); err != nil {
+			log.Printf("admin delete %s: %v", targetPath, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not delete item"), http.StatusSeeOther)
+			return
+		}
 	}
 
-	if err := os.RemoveAll(targetPath); err != nil {
-		log.Printf("admin delete %s: %v", targetPath, err)
-		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not delete item"), http.StatusSeeOther)
-		return
-	}
-
-	s.TriggerBackup(r.Context())
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Deleted successfully"), http.StatusSeeOther)
 }
 
@@ -685,10 +730,20 @@ func (s *Server) handleAdminFilesMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetDir := filepath.Join(wwwDirRoot(), relDir, folderName)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not create folder"), http.StatusSeeOther)
-		return
+	if s.backup != nil {
+		// Zero-disk: create folder prefix in S3
+		if err := s.backup.CreatePublicFolder(r.Context(), relDir, folderName); err != nil {
+			log.Printf("admin mkdir s3 error %s: %v", folderName, err)
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Mkdir failed: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+	} else {
+		// Local disk fallback
+		targetDir := filepath.Join(wwwDirRoot(), relDir, folderName)
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not create folder"), http.StatusSeeOther)
+			return
+		}
 	}
 
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Created folder "+folderName), http.StatusSeeOther)

@@ -3,14 +3,13 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -93,44 +92,7 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 			o.HTTPClient = &httpNoVerifyClient{}
 		}
 	})
-	b := &Backup{cfg: cfg, client: client, log: logger}
-	mountLinuxS3FS(cfg, logger)
-	return b, nil
-}
-
-// mountLinuxS3FS mounts the S3 bucket's www folder into storage/persisted/www on Linux using s3fs if available.
-func mountLinuxS3FS(cfg Config, logger *log.Logger) {
-	wwwDir := filepath.Join("storage", "persisted", "www")
-	_ = os.MkdirAll(wwwDir, 0755)
-
-	if runtime.GOOS != "linux" {
-		logger.Printf("s3: www mount check (OS: %s)", runtime.GOOS)
-		return
-	}
-
-	s3fsBin, err := exec.LookPath("s3fs")
-	if err != nil {
-		logger.Printf("s3: s3fs not found in PATH — skipping auto-mount")
-		return
-	}
-
-	bucketTarget := cfg.Bucket + ":" + strings.TrimSuffix(cfg.Prefix, "/") + "/www"
-	args := []string{
-		bucketTarget,
-		wwwDir,
-		"-o", "use_path_style",
-		"-o", "allow_other",
-	}
-	if cfg.Endpoint != "" {
-		args = append(args, "-o", "url="+cfg.Endpoint)
-	}
-
-	cmd := exec.Command(s3fsBin, args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		logger.Printf("s3: s3fs mount: %v (out: %s)", err, strings.TrimSpace(string(out)))
-	} else {
-		logger.Printf("s3: mounted %s to %s via s3fs", bucketTarget, wwwDir)
-	}
+	return &Backup{cfg: cfg, client: client, log: logger}, nil
 }
 
 // Restore downloads missing files from S3 under storage/persisted/ in parallel.
@@ -295,8 +257,19 @@ func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) err
 	return nil
 }
 
+// PublicFileInfo represents metadata for a public file stored in S3.
+type PublicFileInfo struct {
+	Name      string
+	RelPath   string
+	PublicURL string
+	Size      string
+	SizeBytes int64
+	IsDir     bool
+	ModTime   string
+}
+
 // StreamFile streams a public file directly from S3 to the client (S3 Reverse Proxy).
-// Works everywhere (Vercel, Render, Lambda) without needing local disk writes or FUSE mounts.
+// Returns true if streamed successfully, false if object does not exist.
 func (b *Backup) StreamFile(w http.ResponseWriter, r *http.Request, relKey string) bool {
 	cleanRel := strings.TrimPrefix(filepath.ToSlash(relKey), "/")
 	if unescaped, err := url.PathUnescape(cleanRel); err == nil && unescaped != "" {
@@ -319,8 +292,141 @@ func (b *Backup) StreamFile(w http.ResponseWriter, r *http.Request, relKey strin
 	w.Header().Set("Content-Type", detectContentType(cleanRel))
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = ioCopy(w, body)
-	b.log.Printf("s3: streamed missing file directly from S3: %s", s3Key)
 	return true
+}
+
+// UploadPublicFile streams a file directly from an io.Reader to S3 (zero disk write).
+func (b *Backup) UploadPublicFile(ctx context.Context, relPath string, body io.Reader, size int64, contentType string) error {
+	cleanRel := strings.TrimPrefix(filepath.ToSlash(relPath), "/")
+	s3Key := b.cfg.Prefix + "www/" + cleanRel
+
+	if contentType == "" {
+		contentType = detectContentType(cleanRel)
+	}
+
+	putInput := &s3.PutObjectInput{
+		Bucket:       aws.String(b.cfg.Bucket),
+		Key:          aws.String(s3Key),
+		Body:         body,
+		ContentType:  aws.String(contentType),
+		StorageClass: "STANDARD",
+	}
+	if size > 0 {
+		putInput.ContentLength = aws.Int64(size)
+	}
+
+	_, err := b.client.PutObject(ctx, putInput)
+	if err != nil {
+		b.log.Printf("s3: upload public file %s failed: %v", s3Key, err)
+		return err
+	}
+
+	b.log.Printf("s3: uploaded public file directly to S3: %s", s3Key)
+	return nil
+}
+
+// DeletePublicFile deletes an object directly from S3 (zero disk write).
+func (b *Backup) DeletePublicFile(ctx context.Context, relPath string) error {
+	cleanRel := strings.TrimPrefix(filepath.ToSlash(relPath), "/")
+	s3Key := b.cfg.Prefix + "www/" + cleanRel
+
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(b.cfg.Bucket),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		b.log.Printf("s3: delete public file %s failed: %v", s3Key, err)
+		return err
+	}
+
+	b.log.Printf("s3: deleted public file directly from S3: %s", s3Key)
+	return nil
+}
+
+// CreatePublicFolder creates a virtual folder prefix in S3.
+func (b *Backup) CreatePublicFolder(ctx context.Context, relDir, folderName string) error {
+	cleanDir := strings.TrimPrefix(filepath.ToSlash(relDir), "/")
+	cleanFolder := strings.Trim(filepath.ToSlash(folderName), "/")
+	if cleanFolder == "" {
+		return fmt.Errorf("invalid folder name")
+	}
+
+	folderPrefix := cleanFolder + "/"
+	if cleanDir != "" {
+		folderPrefix = cleanDir + "/" + cleanFolder + "/"
+	}
+
+	s3Key := b.cfg.Prefix + "www/" + folderPrefix + ".keep"
+	return b.UploadPublicFile(ctx, s3Key[len(b.cfg.Prefix+"www/"):], strings.NewReader(""), 0, "application/x-directory")
+}
+
+// ListPublicFiles lists objects under the S3 www/ directory directly from S3.
+func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFileInfo, error) {
+	cleanDir := strings.TrimPrefix(filepath.ToSlash(relDir), "/")
+	prefix := b.cfg.Prefix + "www/"
+	if cleanDir != "" {
+		prefix += cleanDir + "/"
+	}
+
+	input := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(b.cfg.Bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+	}
+
+	output, err := b.client.ListObjectsV2(ctx, input)
+	if err != nil {
+		b.log.Printf("s3: list public files prefix=%s failed: %v", prefix, err)
+		return nil, err
+	}
+
+	var result []PublicFileInfo
+
+	// CommonPrefixes represent subdirectories
+	for _, cp := range output.CommonPrefixes {
+		p := aws.ToString(cp.Prefix)
+		subRel := strings.TrimPrefix(p, b.cfg.Prefix+"www/")
+		subRel = strings.TrimSuffix(subRel, "/")
+		folderName := filepath.Base(subRel)
+		if folderName == "" || folderName == "." {
+			continue
+		}
+
+		result = append(result, PublicFileInfo{
+			Name:      folderName,
+			RelPath:   subRel,
+			PublicURL: "/files/" + subRel,
+			IsDir:     true,
+		})
+	}
+
+	// Objects represent files
+	for _, obj := range output.Contents {
+		key := aws.ToString(obj.Key)
+		fileRel := strings.TrimPrefix(key, b.cfg.Prefix+"www/")
+		if fileRel == "" || strings.HasSuffix(fileRel, "/") || strings.HasSuffix(fileRel, ".keep") {
+			continue
+		}
+
+		fileName := filepath.Base(fileRel)
+		size := aws.ToInt64(obj.Size)
+		modTime := ""
+		if obj.LastModified != nil {
+			modTime = obj.LastModified.Format("02 Jan 2006 15:04")
+		}
+
+		result = append(result, PublicFileInfo{
+			Name:      fileName,
+			RelPath:   fileRel,
+			PublicURL: "/files/" + fileRel,
+			Size:      fmtSizeBytes(size),
+			SizeBytes: size,
+			IsDir:     false,
+			ModTime:   modTime,
+		})
+	}
+
+	return result, nil
 }
 
 // getObjectReader fetches an object stream from S3. Handles 302 Found redirects automatically
