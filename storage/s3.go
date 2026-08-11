@@ -119,9 +119,11 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 
 			targetPath := filepath.Join(rootDir, filepath.FromSlash(relKey))
 
-			// Skip if file already exists locally
-			if _, err := os.Stat(targetPath); err == nil {
-				continue
+			// Skip if file already exists locally and S3 object is not newer
+			if st, err := os.Stat(targetPath); err == nil {
+				if obj.LastModified != nil && !st.ModTime().Before(*obj.LastModified) {
+					continue
+				}
 			}
 
 			out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
@@ -297,17 +299,24 @@ func detectContentType(path string) string {
 	return "application/octet-stream"
 }
 
-// Run loops backups on the configured interval until ctx is cancelled.
+// Run loops backups and periodic S3 restores on interval until ctx is cancelled.
 func (b *Backup) Run(ctx context.Context, checkpoint func(context.Context) error, localPath string) {
-	ticker := time.NewTicker(b.cfg.Interval)
-	defer ticker.Stop()
+	backupTicker := time.NewTicker(b.cfg.Interval)
+	defer backupTicker.Stop()
+
+	// Periodic 60-second S3 restore ticker so Vercel continuously receives Render S3 updates
+	restoreTicker := time.NewTicker(60 * time.Second)
+	defer restoreTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			b.log.Printf("s3: final backup on shutdown")
 			_ = b.Backup(context.Background(), checkpoint, localPath)
 			return
-		case <-ticker.C:
+		case <-restoreTicker.C:
+			_ = b.Restore(ctx, localPath)
+		case <-backupTicker.C:
 			if err := b.Backup(ctx, checkpoint, localPath); err != nil {
 				b.log.Printf("s3: backup failed: %v", err)
 			}
