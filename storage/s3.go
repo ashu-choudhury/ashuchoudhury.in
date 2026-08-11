@@ -279,19 +279,34 @@ func (b *Backup) StreamFile(w http.ResponseWriter, r *http.Request, relKey strin
 		cleanRel = unescaped
 	}
 
-	s3Key := b.cfg.Prefix + "www/" + cleanRel
-	body, err := b.getObjectReader(r.Context(), s3Key)
-	if err != nil {
-		rawS3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
-		if rawS3Key != s3Key {
-			body, err = b.getObjectReader(r.Context(), rawS3Key)
+	candidateKeys := []string{
+		b.cfg.Prefix + "www/" + cleanRel,
+		b.cfg.Prefix + cleanRel,
+		"www/" + cleanRel,
+		cleanRel,
+	}
+
+	var body io.ReadCloser
+	var err error
+	var matchedKey string
+	for _, key := range candidateKeys {
+		if key == "" {
+			continue
 		}
-		if err != nil {
-			return false
+		body, err = b.getObjectReader(r.Context(), key)
+		if err == nil {
+			matchedKey = key
+			break
 		}
+	}
+
+	if err != nil || body == nil {
+		b.log.Printf("[S3 DIAGNOSTIC WARNING] StreamFile '%s' not found in S3 under candidate keys: %v", cleanRel, candidateKeys)
+		return false
 	}
 	defer body.Close()
 
+	b.log.Printf("[S3 DIAGNOSTIC SUCCESS] StreamFile '%s' matched S3 object key '%s'", cleanRel, matchedKey)
 	w.Header().Set("Content-Type", detectContentType(cleanRel))
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = ioCopy(w, body)
@@ -366,21 +381,61 @@ func (b *Backup) CreatePublicFolder(ctx context.Context, relDir, folderName stri
 // ListPublicFiles lists objects under the S3 www/ directory directly from S3.
 func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFileInfo, error) {
 	cleanDir := strings.TrimPrefix(filepath.ToSlash(relDir), "/")
-	prefix := b.cfg.Prefix + "www/"
+
+	candidatePrefixes := []string{
+		b.cfg.Prefix + "www/",
+		"www/",
+		b.cfg.Prefix,
+		"",
+	}
 	if cleanDir != "" {
-		prefix += cleanDir + "/"
+		candidatePrefixes = []string{
+			b.cfg.Prefix + "www/" + cleanDir + "/",
+			"www/" + cleanDir + "/",
+			b.cfg.Prefix + cleanDir + "/",
+			cleanDir + "/",
+		}
 	}
 
-	input := &s3.ListObjectsV2Input{
-		Bucket:    aws.String(b.cfg.Bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
+	var output *s3.ListObjectsV2Output
+	var err error
+	var usedPrefix string
+
+	for _, p := range candidatePrefixes {
+		input := &s3.ListObjectsV2Input{
+			Bucket:    aws.String(b.cfg.Bucket),
+			Prefix:    aws.String(p),
+			Delimiter: aws.String("/"),
+		}
+		out, e := b.client.ListObjectsV2(ctx, input)
+		if e == nil && (len(out.Contents) > 0 || len(out.CommonPrefixes) > 0) {
+			output = out
+			err = nil
+			usedPrefix = p
+			b.log.Printf("[S3 DIAGNOSTIC SUCCESS] ListPublicFiles matched prefix '%s' (found %d contents, %d subdirs)", p, len(out.Contents), len(out.CommonPrefixes))
+			break
+		}
+		if e != nil && err == nil {
+			err = e
+		}
 	}
 
-	output, err := b.client.ListObjectsV2(ctx, input)
-	if err != nil {
-		b.log.Printf("s3: list public files prefix=%s failed: %v", prefix, err)
-		return nil, err
+	if output == nil {
+		usedPrefix = b.cfg.Prefix + "www/"
+		if cleanDir != "" {
+			usedPrefix += cleanDir + "/"
+		}
+		input := &s3.ListObjectsV2Input{
+			Bucket:    aws.String(b.cfg.Bucket),
+			Prefix:    aws.String(usedPrefix),
+			Delimiter: aws.String("/"),
+		}
+		out, e := b.client.ListObjectsV2(ctx, input)
+		if e != nil {
+			b.log.Printf("[S3 DIAGNOSTIC ERROR] ListPublicFiles prefix='%s' failed: %v", usedPrefix, e)
+			return nil, e
+		}
+		output = out
 	}
 
 	var result []PublicFileInfo
@@ -388,8 +443,11 @@ func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFi
 	// CommonPrefixes represent subdirectories
 	for _, cp := range output.CommonPrefixes {
 		p := aws.ToString(cp.Prefix)
-		subRel := strings.TrimPrefix(p, b.cfg.Prefix+"www/")
+		subRel := strings.TrimPrefix(p, usedPrefix)
 		subRel = strings.TrimSuffix(subRel, "/")
+		if cleanDir != "" {
+			subRel = cleanDir + "/" + subRel
+		}
 		folderName := filepath.Base(subRel)
 		if folderName == "" || folderName == "." {
 			continue
@@ -406,9 +464,13 @@ func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFi
 	// Objects represent files
 	for _, obj := range output.Contents {
 		key := aws.ToString(obj.Key)
-		fileRel := strings.TrimPrefix(key, b.cfg.Prefix+"www/")
+		fileRel := strings.TrimPrefix(key, usedPrefix)
 		if fileRel == "" || strings.HasSuffix(fileRel, "/") || strings.HasSuffix(fileRel, ".keep") {
 			continue
+		}
+		fullRel := fileRel
+		if cleanDir != "" {
+			fullRel = cleanDir + "/" + fileRel
 		}
 
 		fileName := filepath.Base(fileRel)
@@ -420,8 +482,8 @@ func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFi
 
 		result = append(result, PublicFileInfo{
 			Name:      fileName,
-			RelPath:   fileRel,
-			PublicURL: "/files/" + fileRel,
+			RelPath:   fullRel,
+			PublicURL: "/files/" + fullRel,
 			Size:      fmtSizeBytes(size),
 			SizeBytes: size,
 			IsDir:     false,
@@ -429,6 +491,7 @@ func (b *Backup) ListPublicFiles(ctx context.Context, relDir string) ([]PublicFi
 		})
 	}
 
+	b.log.Printf("[S3 DIAGNOSTIC SUCCESS] ListPublicFiles returning %d items (usedPrefix='%s', relDir='%s')", len(result), usedPrefix, relDir)
 	return result, nil
 }
 
