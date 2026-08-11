@@ -76,23 +76,25 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 		region = envOr("AWS_REGION", "us-east-1")
 	}
 
-	client := s3.New(s3.Options{
-		Region: region,
-	}, func(o *s3.Options) {
-		id := os.Getenv("AWS_ACCESS_KEY_ID")
-		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
-		if id != "" && secret != "" {
-			o.Credentials = credentials.NewStaticCredentialsProvider(id, secret, os.Getenv("AWS_SESSION_TOKEN"))
-		}
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
-			o.UsePathStyle = true
-		}
-		if cfg.NoVerify {
-			o.HTTPClient = &httpNoVerifyClient{}
-		}
-	})
+	options := s3.Options{
+		Region:       region,
+		UsePathStyle: true,
+	}
 
+	id := os.Getenv("AWS_ACCESS_KEY_ID")
+	secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if id != "" && secret != "" {
+		options.Credentials = credentials.NewStaticCredentialsProvider(id, secret, os.Getenv("AWS_SESSION_TOKEN"))
+	}
+
+	if cfg.Endpoint != "" {
+		options.BaseEndpoint = aws.String(cfg.Endpoint)
+	}
+	if cfg.NoVerify {
+		options.HTTPClient = &httpNoVerifyClient{}
+	}
+
+	client := s3.New(options)
 	return &Backup{cfg: cfg, client: client, log: logger}, nil
 }
 
