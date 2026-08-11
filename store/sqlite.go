@@ -103,7 +103,12 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 
 	if isTurso {
 		driver = "libsql"
-		token := os.Getenv("TURSO_AUTH_TOKEN")
+		token := strings.TrimSpace(os.Getenv("TURSO_AUTH_TOKEN"))
+		token = strings.TrimPrefix(token, "Bearer ")
+		if strings.HasPrefix(token, "libsql://") || strings.HasPrefix(token, "http://") || strings.HasPrefix(token, "https://") {
+			log.Printf("[TURSO DIAGNOSTIC ERROR] TURSO_AUTH_TOKEN is invalid (contains database URL instead of JWT token)")
+			token = ""
+		}
 		if token != "" && !strings.Contains(dsn, "authToken=") {
 			if strings.Contains(dsn, "?") {
 				dsn += "&authToken=" + url.QueryEscape(token)
@@ -127,6 +132,12 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(5 * time.Minute)
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pingCancel()
+		if err := db.PingContext(pingCtx); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("ping turso database: %w", err)
+		}
 	} else if dsn != ":memory:" {
 		db.SetMaxOpenConns(1)
 		if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
