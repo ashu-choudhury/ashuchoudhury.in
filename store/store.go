@@ -166,6 +166,9 @@ type Store interface {
 	// Ping checks database connectivity and health.
 	Ping(ctx context.Context) error
 
+	// DriverName returns the active store implementation name (e.g. "turso", "sqlite", "in-memory").
+	DriverName() string
+
 	// Close releases the underlying resources.
 	Close() error
 }

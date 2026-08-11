@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS settings (
 
 // SQLite implements Store backed by a SQLite database.
 type SQLite struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
 // OpenSQLite opens the database at dsn and applies the schema.
@@ -101,7 +102,9 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 	driver := "sqlite"
 	isTurso := strings.HasPrefix(dsn, "libsql://") || strings.HasPrefix(dsn, "http://") || strings.HasPrefix(dsn, "https://")
 
+	driverName := "sqlite"
 	if isTurso {
+		driverName = "turso"
 		driver = "libsql"
 		token := strings.TrimSpace(os.Getenv("TURSO_AUTH_TOKEN"))
 		token = strings.TrimPrefix(token, "Bearer ")
@@ -159,8 +162,16 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 			}
 		}
 	}
-	log.Printf("[DATABASE DIAGNOSTIC SUCCESS] Database schema verified cleanly")
-	return &SQLite{db: db}, nil
+	log.Printf("[DATABASE DIAGNOSTIC SUCCESS] Database schema verified cleanly (%s)", driverName)
+	return &SQLite{db: db, driver: driverName}, nil
+}
+
+// DriverName implements Store.
+func (s *SQLite) DriverName() string {
+	if s.driver != "" {
+		return s.driver
+	}
+	return "sqlite"
 }
 
 // Ping implements Store.

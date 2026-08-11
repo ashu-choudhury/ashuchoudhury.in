@@ -394,6 +394,11 @@ func (m *Memory) SetSetting(ctx context.Context, key, value string) error {
 	return nil
 }
 
+// DriverName implements Store.
+func (m *Memory) DriverName() string {
+	return "in-memory"
+}
+
 // Ping implements Store.
 func (m *Memory) Ping(ctx context.Context) error {
 	return nil

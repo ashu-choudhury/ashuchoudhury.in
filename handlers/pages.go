@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
+	"os"
 	"strings"
 	"time"
 
@@ -297,13 +298,14 @@ func parseRepoOwnerAndName(repoURL, slug string) (string, string) {
 	return importer.DefaultOwner, slug
 }
 
-// handleHealth returns a JSON diagnostic report of database connection status and ping latency.
+// handleHealth returns a JSON diagnostic report of database connection status, active store type, S3 proxy status, and env configuration.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	start := time.Now()
 	err := s.Store.Ping(r.Context())
 	latency := time.Since(start).Milliseconds()
 
+	storeType := s.Store.DriverName()
 	status := "ok"
 	dbStatus := "connected"
 	if err != nil {
@@ -312,6 +314,27 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	fmt.Fprintf(w, `{"status":"%s","database":"%s","ping_ms":%d}`, status, dbStatus, latency)
+	s3Status := "disabled"
+	if s.backup != nil {
+		s3Status = "enabled"
+	}
+
+	tursoURLEnv := "missing"
+	if os.Getenv("TURSO_DATABASE_URL") != "" {
+		tursoURLEnv = "configured"
+	}
+
+	tursoTokenEnv := "missing"
+	if os.Getenv("TURSO_AUTH_TOKEN") != "" {
+		tursoTokenEnv = "configured"
+	}
+
+	s3BucketEnv := "missing"
+	if os.Getenv("S3_BUCKET") != "" {
+		s3BucketEnv = "configured"
+	}
+
+	fmt.Fprintf(w, `{"status":"%s","store_type":"%s","database":"%s","ping_ms":%d,"s3_storage":"%s","env_checks":{"TURSO_DATABASE_URL":"%s","TURSO_AUTH_TOKEN":"%s","S3_BUCKET":"%s"}}`,
+		status, storeType, dbStatus, latency, s3Status, tursoURLEnv, tursoTokenEnv, s3BucketEnv)
 }
 
