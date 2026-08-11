@@ -247,15 +247,50 @@ templ AdminPostsList(posts []store.Post) {
 
 // AdminPostForm renders the create/edit post form with an HTMX markdown
 // preview. p may be nil for new posts; previewHTML is the server-rendered
-// markdown shown on first load (kept in sync live as the body is typed).
-templ AdminPostForm(p *store.Post, isNew bool, errMsg string, previewHTML string) {
-	<div class="card admin-panel">
+// AdminPostForm renders the create/edit post form with an HTMX markdown
+// preview and AI content generator block.
+templ AdminPostForm(p *store.Post, isNew bool, errMsg string, previewHTML string, models []string, selectedModel string, topic string) {
+	<div id="admin-post-form-wrap" class="card admin-panel">
 		if errMsg != "" {
-			<div class="form-msg err">
+			<div class="form-msg err mb-2">
 				@Icon("alert", 17)
 				<div>{ errMsg }</div>
 			</div>
 		}
+		<div class="ai-generator-box mb-3 p-3 card" style="background: var(--bg-surface, #1e1e2e); border: 1px solid var(--border-color, #313244); border-radius: 8px;">
+			<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+				@Icon("sparkles", 18)
+				<strong style="font-size: 1.05rem;">AI Blog Post Generator</strong>
+			</div>
+			<p class="form-note mb-2">Select a model and enter a topic to auto-generate title, summary, tags, and full Markdown body using your configured OpenAI-compatible API.</p>
+			<div class="form-row" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+				<div class="form-field" style="flex: 1; min-width: 160px;">
+					<label for="ai-model">Model</label>
+					<select id="ai-model" name="model">
+						for _, m := range models {
+							<option value={ m } selected={ m == selectedModel }>{ m }</option>
+						}
+					</select>
+				</div>
+				<div class="form-field" style="flex: 3; min-width: 240px;">
+					<label for="ai-topic">Topic or Prompt</label>
+					<input id="ai-topic" name="topic" type="text" value={ topic } placeholder="e.g. Building scalable web applications in Go & HTMX"/>
+				</div>
+				<div class="form-field" style="flex: 0 0 auto;">
+					<button class="btn btn-secondary" type="button"
+						hx-post="/admin/posts/generate-ai"
+						hx-include="#admin-post-form-wrap form, #admin-post-form-wrap select, #admin-post-form-wrap input"
+						hx-target="#admin-post-form-wrap"
+						hx-swap="outerHTML"
+						hx-indicator="#ai-spinner">
+						@Icon("zap", 16)
+						Generate Post with AI
+					</button>
+				</div>
+			</div>
+			<div id="ai-spinner" class="htmx-indicator form-note mt-1" style="display: none;">Generating post with AI… please wait.</div>
+		</div>
+
 		<form class="contact-form admin-form" method="post" action={ postFormAction(isNew) }>
 			<input type="hidden" name="csrf" value={ csrfValue() }/>
 			<input type="hidden" name="id" value={ postID(p) }/>
@@ -555,17 +590,18 @@ templ AdminProjectForm(p *store.Project, isNew bool, errMsg string, previewHTML 
 	</div>
 }
 
-// AdminSettingsForm renders the site settings editor.
-templ AdminSettingsForm(siteTitle, siteDesc string, saved bool) {
+// AdminSettingsForm renders the site settings editor and AI provider configuration.
+templ AdminSettingsForm(siteTitle, siteDesc, aiBaseURL, aiAPIKey, aiModels, aiDefaultModel string, saved bool) {
 	if saved {
-		<div class="form-msg ok">
+		<div class="form-msg ok mb-2">
 			@Icon("check-circle", 17)
-			<div>Settings saved.</div>
+			<div>Settings saved successfully.</div>
 		</div>
 	}
 	<div class="card admin-panel">
 		<form class="contact-form admin-form" method="post" action="/admin/settings">
 			<input type="hidden" name="csrf" value={ csrfValue() }/>
+			<h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Site Identity</h2>
 			<div class="form-field">
 				<label for="site-title">Site title</label>
 				<input id="site-title" name="site_title" type="text" value={ siteTitle }/>
@@ -574,7 +610,30 @@ templ AdminSettingsForm(siteTitle, siteDesc string, saved bool) {
 				<label for="site-desc">Meta description</label>
 				<textarea id="site-desc" name="site_desc">{ siteDesc }</textarea>
 			</div>
-			<div class="admin-form-actions">
+
+			<hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border-color, #313244);"/>
+
+			<h2 style="font-size: 1.2rem; margin-bottom: 0.5rem;">AI Provider Configuration (OpenAI Compatible)</h2>
+			<p class="form-note mb-2">Configure any OpenAI-compatible API endpoint (OpenAI, OpenRouter, DeepSeek, Ollama, Groq, Gemini OpenAI layer) to generate blog posts using AI.</p>
+			
+			<div class="form-field">
+				<label for="ai-base-url">OpenAI Compatible Base URL</label>
+				<input id="ai-base-url" name="ai_base_url" type="url" value={ aiBaseURL } placeholder="https://api.openai.com/v1"/>
+			</div>
+			<div class="form-field">
+				<label for="ai-api-key">API Key</label>
+				<input id="ai-api-key" name="ai_api_key" type="password" value={ aiAPIKey } placeholder="sk-..."/>
+			</div>
+			<div class="form-field">
+				<label for="ai-models">Configured Models (comma-separated for combobox selector)</label>
+				<input id="ai-models" name="ai_models" type="text" value={ aiModels } placeholder="gpt-4o-mini, gpt-4o, deepseek-chat, gemini-2.5-flash"/>
+			</div>
+			<div class="form-field">
+				<label for="ai-default-model">Default Selected Model</label>
+				<input id="ai-default-model" name="ai_default_model" type="text" value={ aiDefaultModel } placeholder="gpt-4o-mini"/>
+			</div>
+
+			<div class="admin-form-actions mt-3">
 				<button class="btn btn-primary" type="submit">Save settings</button>
 			</div>
 		</form>

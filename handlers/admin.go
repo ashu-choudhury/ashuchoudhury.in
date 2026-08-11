@@ -141,63 +141,110 @@ func (s *Server) handleAdminPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminPostNew(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	models := s.ConfiguredAIModels(ctx)
+	cfg := s.DefaultAIConfig(ctx)
+
 	if r.Method == http.MethodGet {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(nil, true, "", ""))
+			components.AdminPostForm(nil, true, "", "", models, cfg.Model, ""))
 		return
 	}
 	// POST create
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, errMsg, renderMarkdown(p.Body)))
+			components.AdminPostForm(p, true, errMsg, renderMarkdown(p.Body), models, cfg.Model, ""))
 		return
 	}
 	if _, err := s.Store.GetPost(r.Context(), p.Slug); err == nil {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdown(p.Body)))
+			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdown(p.Body), models, cfg.Model, ""))
 		return
 	}
 	id, err := s.Store.CreatePost(r.Context(), *p)
 	if err != nil {
 		log.Printf("admin: create post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdown(p.Body)))
+			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdown(p.Body), models, cfg.Model, ""))
 		return
 	}
 	http.Redirect(w, r, "/admin/posts/"+itoa64(id)+"/edit", http.StatusSeeOther)
 }
 
 func (s *Server) handleAdminPostEdit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	models := s.ConfiguredAIModels(ctx)
+	cfg := s.DefaultAIConfig(ctx)
+
 	id, err := parseID(r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := s.Store.GetPostByID(r.Context(), id)
+	p, err := s.Store.GetPostByID(ctx, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-		components.AdminPostForm(p, false, "", renderMarkdown(p.Body)))
+		components.AdminPostForm(p, false, "", renderMarkdown(p.Body), models, cfg.Model, ""))
 }
 
 func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	models := s.ConfiguredAIModels(ctx)
+	cfg := s.DefaultAIConfig(ctx)
+
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, errMsg, renderMarkdown(p.Body)))
+			components.AdminPostForm(p, false, errMsg, renderMarkdown(p.Body), models, cfg.Model, ""))
 		return
 	}
-	if err := s.Store.UpdatePost(r.Context(), *p); err != nil {
+	if err := s.Store.UpdatePost(ctx, *p); err != nil {
 		log.Printf("admin: update post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body)))
+			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body), models, cfg.Model, ""))
 		return
 	}
-	s.TriggerBackup(r.Context())
+	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
+}
+
+func (s *Server) handleAdminPostGenerateAI(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	models := s.ConfiguredAIModels(ctx)
+	cfg := s.DefaultAIConfig(ctx)
+
+	topic := strings.TrimSpace(r.FormValue("topic"))
+	selectedModel := strings.TrimSpace(r.FormValue("model"))
+	if selectedModel != "" {
+		cfg.Model = selectedModel
+	}
+
+	p, _ := s.parsePostForm(r)
+	if p == nil {
+		p = &store.Post{}
+	}
+	isNew := p.ID == 0
+
+	res, err := GenerateAIBlogPost(ctx, cfg, topic)
+	if err != nil {
+		log.Printf("admin generate ai: %v", err)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		components.AdminPostForm(p, isNew, "AI Generation failed: "+err.Error(), renderMarkdown(p.Body), models, cfg.Model, topic).Render(ctx, w)
+		return
+	}
+
+	p.Title = res.Title
+	p.Slug = res.Slug
+	p.Summary = res.Summary
+	p.Tags = res.Tags
+	p.Body = res.Body
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	components.AdminPostForm(p, isNew, "", renderMarkdown(p.Body), models, cfg.Model, topic).Render(ctx, w)
 }
 
 func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
@@ -553,25 +600,41 @@ func (s *Server) handleAdminProjectFeatured(w http.ResponseWriter, r *http.Reque
 // Settings
 
 func (s *Server) handleAdminSettingsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	title := data.SiteName
 	desc := data.SiteTag
-	if v, err := s.Store.GetSetting(r.Context(), settingsTitle); err == nil && v != "" {
+	if v, err := s.Store.GetSetting(ctx, settingsTitle); err == nil && v != "" {
 		title = v
 	}
-	if v, err := s.Store.GetSetting(r.Context(), settingsDesc); err == nil && v != "" {
+	if v, err := s.Store.GetSetting(ctx, settingsDesc); err == nil && v != "" {
 		desc = v
 	}
+
+	aiCfg := s.DefaultAIConfig(ctx)
+	aiModelsStr := strings.Join(s.ConfiguredAIModels(ctx), ", ")
+
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Settings", Active: "settings"},
-		components.AdminSettingsForm(title, desc, r.URL.Query().Get("saved") == "1"))
+		components.AdminSettingsForm(title, desc, aiCfg.BaseURL, aiCfg.APIKey, aiModelsStr, aiCfg.Model, r.URL.Query().Get("saved") == "1"))
 }
 
 func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	title := strings.TrimSpace(r.FormValue("site_title"))
 	desc := strings.TrimSpace(r.FormValue("site_desc"))
-	_ = s.Store.SetSetting(r.Context(), settingsTitle, title)
-	_ = s.Store.SetSetting(r.Context(), settingsDesc, desc)
+	aiBaseURL := strings.TrimSpace(r.FormValue("ai_base_url"))
+	aiAPIKey := strings.TrimSpace(r.FormValue("ai_api_key"))
+	aiModels := strings.TrimSpace(r.FormValue("ai_models"))
+	aiDefaultModel := strings.TrimSpace(r.FormValue("ai_default_model"))
+
+	_ = s.Store.SetSetting(ctx, settingsTitle, title)
+	_ = s.Store.SetSetting(ctx, settingsDesc, desc)
+	_ = s.Store.SetSetting(ctx, "ai_base_url", aiBaseURL)
+	_ = s.Store.SetSetting(ctx, "ai_api_key", aiAPIKey)
+	_ = s.Store.SetSetting(ctx, "ai_models", aiModels)
+	_ = s.Store.SetSetting(ctx, "ai_default_model", aiDefaultModel)
+
 	data.SetSiteIdentity(title, desc)
-	s.TriggerBackup(r.Context())
+	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/settings?saved=1", http.StatusSeeOther)
 }
 
