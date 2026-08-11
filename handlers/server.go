@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -86,29 +85,26 @@ func (s *Server) staticHandler() http.Handler {
 }
 
 // filesHandler serves public assets directly from S3 as a zero-disk S3 proxy.
-// If S3 is disabled, it falls back to local storage/persisted/www.
 func (s *Server) filesHandler() http.Handler {
-	wwwDir := filepath.Join("storage", "persisted", "www")
-	_ = os.MkdirAll(wwwDir, 0755)
-	fileServer := http.StripPrefix("/files/", http.FileServer(http.Dir(wwwDir)))
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		relPath := strings.TrimPrefix(r.URL.Path, "/files/")
 		if unescaped, err := url.PathUnescape(relPath); err == nil && unescaped != "" {
 			relPath = unescaped
 		}
 
-		// Direct S3 Proxy streaming (zero disk write / zero disk read)
-		if s.backup != nil {
-			if s.backup.StreamFile(w, r, relPath) {
-				return
-			}
+		if s.backup == nil {
+			log.Printf("[S3 DIAGNOSTIC ERROR] Cannot serve /files/%s: s.backup is NIL (S3_BUCKET is not set in environment)", relPath)
 			http.NotFound(w, r)
 			return
 		}
 
-		// Local disk fallback only if S3 is not configured
-		fileServer.ServeHTTP(w, r)
+		log.Printf("[S3 DIAGNOSTIC] Serving /files/%s via S3 proxy", relPath)
+		if s.backup.StreamFile(w, r, relPath) {
+			return
+		}
+
+		log.Printf("[S3 DIAGNOSTIC WARNING] S3 file '%s' not found -> returning 404", relPath)
+		http.NotFound(w, r)
 	})
 }
 

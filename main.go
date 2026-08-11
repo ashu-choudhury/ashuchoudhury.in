@@ -91,24 +91,19 @@ func main() {
 	}
 
 	// ------------------------------------------------------------------
-	// S3 backup layer (env-gated; disabled unless S3_BUCKET is set).
-	// Configure + restore BEFORE opening the database: restore only runs
-	// when the local file is missing (fresh volume), so it must download
-	// the snapshot before OpenSQLite creates an empty file.
+	// S3 proxy layer (zero-disk media streaming).
 	backupCfg := storage.ConfigFromEnv()
-	backupCtx, backupCancel := context.WithCancel(rctx())
-	defer backupCancel()
-	backup := (*storage.Backup)(nil)
-	backupDone := make(chan struct{})
+	var backup *storage.Backup
 	if backupCfg.Enabled {
 		b, err := storage.NewBackup(backupCfg, log.Default())
 		if err != nil {
-			log.Fatalf("s3: configure backup: %v", err)
+			log.Printf("[S3 DIAGNOSTIC ERROR] Failed to initialize S3 proxy: %v", err)
+		} else {
+			backup = b
+			log.Printf("[S3 DIAGNOSTIC SUCCESS] S3 Storage proxy initialized cleanly (Bucket: '%s', Region: '%s', Endpoint: '%s')", backupCfg.Bucket, backupCfg.Region, backupCfg.Endpoint)
 		}
-		backup = b
-		if err := b.Restore(backupCtx, dsn); err != nil {
-			log.Printf("s3: restore failed (continuing with local db): %v", err)
-		}
+	} else {
+		log.Printf("[S3 DIAGNOSTIC WARNING] S3 is disabled. S3_BUCKET env variable is empty!")
 	}
 
 	db, err := store.OpenSQLite(dsn)
@@ -116,13 +111,6 @@ func main() {
 		log.Fatalf("open database (%s): %v", dsn, err)
 	}
 	defer db.Close()
-	if backup != nil {
-		// Periodic backups; Run performs a final backup on ctx cancel.
-		go func() {
-			defer close(backupDone)
-			backup.Run(backupCtx, db.Checkpoint, dsn)
-		}()
-	}
 
 	// Seed the curated catalogue (idempotent; preserves admin overrides).
 	ctx := rctx()
@@ -181,16 +169,7 @@ func main() {
 		_ = httpSrv.Shutdown(shutCtx)
 	}
 
-	// Cancel the backup loop; it performs its final backup on cancel, so
-	// the last writes are persisted after the server stops.
-	backupCancel()
-	if backup != nil {
-		select {
-		case <-backupDone:
-		case <-time.After(20 * time.Second):
-			log.Printf("s3: final backup timed out")
-		}
-	}
+	log.Printf("server shut down gracefully")
 	log.Printf("bye")
 }
 

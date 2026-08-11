@@ -3,8 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -31,18 +29,6 @@ func TestSanitizeRelPath(t *testing.T) {
 }
 
 func TestFilesHandlerStreaming(t *testing.T) {
-	wwwDir := filepath.Join("storage", "persisted", "www")
-	if err := os.MkdirAll(wwwDir, 0755); err != nil {
-		t.Fatalf("mkdir www: %v", err)
-	}
-
-	testFile := filepath.Join(wwwDir, "test_stream.txt")
-	testContent := "Hello, public file streaming!"
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("write test file: %v", err)
-	}
-	defer os.Remove(testFile)
-
 	srv := &Server{}
 	handler := srv.filesHandler()
 
@@ -51,10 +37,7 @@ func TestFilesHandlerStreaming(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 OK, got %d", rec.Code)
-	}
-	if rec.Body.String() != testContent {
-		t.Errorf("expected body %q, got %q", testContent, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 Not Found when S3 is unconfigured, got %d", rec.Code)
 	}
 }

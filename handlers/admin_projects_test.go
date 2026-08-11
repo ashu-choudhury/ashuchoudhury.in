@@ -71,8 +71,8 @@ func TestProjectCRUDAndAttachmentUpload(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 for project attachment, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for project attachment when S3 unconfigured, got %d", rec.Code)
 	}
 }
 

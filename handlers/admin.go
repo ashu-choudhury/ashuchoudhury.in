@@ -580,11 +580,15 @@ func (s *Server) handleAdminFiles(w http.ResponseWriter, r *http.Request) {
 
 	var files []components.FileInfo
 
-	if s.backup != nil {
-		// Zero-disk: list directly from S3 bucket (portfolio/www/<dir>)
+	if s.backup == nil {
+		log.Printf("[S3 DIAGNOSTIC WARNING] s.backup is NIL on request /admin/files. Check if S3_BUCKET is set in environment variables!")
+	} else {
+		log.Printf("[S3 DIAGNOSTIC] Fetching file list from S3 for relDir='%s'", relDir)
 		s3Files, err := s.backup.ListPublicFiles(r.Context(), relDir)
 		if err != nil {
-			log.Printf("admin files list s3 error %s: %v", relDir, err)
+			log.Printf("[S3 DIAGNOSTIC ERROR] ListPublicFiles relDir='%s' failed: %v", relDir, err)
+		} else {
+			log.Printf("[S3 DIAGNOSTIC SUCCESS] ListPublicFiles found %d items for relDir='%s'", len(s3Files), relDir)
 		}
 		for _, f := range s3Files {
 			files = append(files, components.FileInfo{
@@ -594,35 +598,6 @@ func (s *Server) handleAdminFiles(w http.ResponseWriter, r *http.Request) {
 				Size:      f.Size,
 				IsDir:     f.IsDir,
 				ModTime:   f.ModTime,
-			})
-		}
-	} else {
-		// Local disk fallback if S3 is not configured
-		root := wwwDirRoot()
-		targetDir := filepath.Join(root, relDir)
-		_ = os.MkdirAll(targetDir, 0755)
-
-		entries, err := os.ReadDir(targetDir)
-		if err != nil {
-			log.Printf("admin files list local %s: %v", targetDir, err)
-		}
-
-		for _, entry := range entries {
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-			itemRelPath := filepath.Join(relDir, entry.Name())
-			urlPath := strings.ReplaceAll(itemRelPath, "\\", "/")
-			publicURL := "/files/" + urlPath
-
-			files = append(files, components.FileInfo{
-				Name:      entry.Name(),
-				RelPath:   itemRelPath,
-				PublicURL: publicURL,
-				Size:      fmtSizeBytes(info.Size()),
-				IsDir:     entry.IsDir(),
-				ModTime:   info.ModTime().Format("02 Jan 2006 15:04"),
 			})
 		}
 	}
@@ -654,33 +629,18 @@ func (s *Server) handleAdminFilesUpload(w http.ResponseWriter, r *http.Request) 
 		targetRel = relDir + "/" + cleanName
 	}
 
-	if s.backup != nil {
-		// Zero-disk: stream upload directly to S3
-		contentType := header.Header.Get("Content-Type")
-		if err := s.backup.UploadPublicFile(r.Context(), targetRel, file, header.Size, contentType); err != nil {
-			log.Printf("admin upload s3 error %s: %v", targetRel, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Upload failed: "+err.Error()), http.StatusSeeOther)
-			return
-		}
-	} else {
-		// Local disk fallback if S3 is not configured
-		targetDir := filepath.Join(wwwDirRoot(), relDir)
-		_ = os.MkdirAll(targetDir, 0755)
-		destPath := filepath.Join(targetDir, cleanName)
+	if s.backup == nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] Cannot upload file '%s': S3 storage is not configured", targetRel)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Upload failed: S3 storage is not configured on server"), http.StatusSeeOther)
+		return
+	}
 
-		dst, err := os.Create(destPath)
-		if err != nil {
-			log.Printf("admin upload save %s: %v", destPath, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not save uploaded file"), http.StatusSeeOther)
-			return
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, file); err != nil {
-			log.Printf("admin upload copy %s: %v", destPath, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Error writing file content"), http.StatusSeeOther)
-			return
-		}
+	contentType := header.Header.Get("Content-Type")
+	log.Printf("[S3 DIAGNOSTIC] Uploading '%s' (%d bytes, %s) to S3", targetRel, header.Size, contentType)
+	if err := s.backup.UploadPublicFile(r.Context(), targetRel, file, header.Size, contentType); err != nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] UploadPublicFile '%s' failed: %v", targetRel, err)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Upload failed: "+err.Error()), http.StatusSeeOther)
+		return
 	}
 
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Uploaded "+cleanName+" successfully"), http.StatusSeeOther)
@@ -694,28 +654,17 @@ func (s *Server) handleAdminFilesDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if s.backup != nil {
-		// Zero-disk: delete directly from S3
-		if err := s.backup.DeletePublicFile(r.Context(), relPath); err != nil {
-			log.Printf("admin delete s3 error %s: %v", relPath, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Delete failed: "+err.Error()), http.StatusSeeOther)
-			return
-		}
-	} else {
-		// Local disk fallback
-		root := wwwDirRoot()
-		targetPath := filepath.Join(root, relPath)
+	if s.backup == nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] Cannot delete path '%s': S3 storage is not configured", relPath)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Delete failed: S3 storage is not configured on server"), http.StatusSeeOther)
+		return
+	}
 
-		if !strings.HasPrefix(targetPath, root) {
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Permission denied"), http.StatusSeeOther)
-			return
-		}
-
-		if err := os.RemoveAll(targetPath); err != nil {
-			log.Printf("admin delete %s: %v", targetPath, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not delete item"), http.StatusSeeOther)
-			return
-		}
+	log.Printf("[S3 DIAGNOSTIC] Deleting path '%s' from S3", relPath)
+	if err := s.backup.DeletePublicFile(r.Context(), relPath); err != nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] DeletePublicFile '%s' failed: %v", relPath, err)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Delete failed: "+err.Error()), http.StatusSeeOther)
+		return
 	}
 
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Deleted successfully"), http.StatusSeeOther)
@@ -730,20 +679,17 @@ func (s *Server) handleAdminFilesMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.backup != nil {
-		// Zero-disk: create folder prefix in S3
-		if err := s.backup.CreatePublicFolder(r.Context(), relDir, folderName); err != nil {
-			log.Printf("admin mkdir s3 error %s: %v", folderName, err)
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Mkdir failed: "+err.Error()), http.StatusSeeOther)
-			return
-		}
-	} else {
-		// Local disk fallback
-		targetDir := filepath.Join(wwwDirRoot(), relDir, folderName)
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("Could not create folder"), http.StatusSeeOther)
-			return
-		}
+	if s.backup == nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] Cannot create folder '%s': S3 storage is not configured", folderName)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Mkdir failed: S3 storage is not configured on server"), http.StatusSeeOther)
+		return
+	}
+
+	log.Printf("[S3 DIAGNOSTIC] Creating S3 folder marker for '%s' in '%s'", folderName, relDir)
+	if err := s.backup.CreatePublicFolder(r.Context(), relDir, folderName); err != nil {
+		log.Printf("[S3 DIAGNOSTIC ERROR] CreatePublicFolder '%s' failed: %v", folderName, err)
+		http.Redirect(w, r, "/admin/files?dir="+relDir+"&err="+url.QueryEscape("S3 Mkdir failed: "+err.Error()), http.StatusSeeOther)
+		return
 	}
 
 	http.Redirect(w, r, "/admin/files?dir="+relDir+"&msg="+url.QueryEscape("Created folder "+folderName), http.StatusSeeOther)
