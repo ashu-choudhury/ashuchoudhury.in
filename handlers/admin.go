@@ -16,6 +16,7 @@ import (
 
 	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/data"
+	"github.com/ashu-choudhury/portfolio/importer"
 	"github.com/ashu-choudhury/portfolio/store"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -357,8 +358,25 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load projects", http.StatusInternalServerError)
 		return
 	}
+	msg := r.URL.Query().Get("msg")
+	errMsg := r.URL.Query().Get("err")
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Projects", Active: "projects"},
-		components.AdminProjectsList(projects))
+		components.AdminProjectsList(projects, msg, errMsg))
+}
+
+func (s *Server) handleAdminProjectsSync(w http.ResponseWriter, r *http.Request) {
+	opts := importer.SyncOptions{
+		Owner:        importer.DefaultOwner,
+		Fingerprints: true,
+		Readmes:      true,
+	}
+	if err := importer.Sync(r.Context(), s.Store, opts); err != nil {
+		log.Printf("admin projects sync: %v", err)
+		http.Redirect(w, r, "/admin/projects?err="+url.QueryEscape("GitHub sync failed: "+err.Error()), http.StatusSeeOther)
+		return
+	}
+	s.TriggerBackup(r.Context())
+	http.Redirect(w, r, "/admin/projects?msg="+url.QueryEscape("Synced open-source repositories from GitHub successfully."), http.StatusSeeOther)
 }
 
 func (s *Server) handleAdminProjectNew(w http.ResponseWriter, r *http.Request) {

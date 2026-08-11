@@ -108,3 +108,19 @@ func TestParseProjectForm(t *testing.T) {
 		t.Errorf("features parsing failed: %v", p.Features)
 	}
 }
+
+func TestAdminProjectsSyncRoute(t *testing.T) {
+	memStore := store.NewMemory()
+	srv := New(memStore, nil)
+	handler := srv.Handler()
+
+	// Test unauthenticated GET request to admin projects redirects to login
+	req := httptest.NewRequest(http.MethodGet, "/admin/projects", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/admin/login" {
+		t.Errorf("expected redirect to /admin/login for unauthenticated request, got code %d, loc %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+

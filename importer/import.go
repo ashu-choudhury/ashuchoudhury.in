@@ -66,6 +66,34 @@ func Sync(ctx context.Context, s store.Store, opts SyncOptions) error {
 			}
 		}
 
+		// Preserve existing store overrides and custom curation if available.
+		if existing, err := s.GetProject(ctx, p.Slug); err == nil && existing != nil {
+			if len(existing.Features) > 0 {
+				p.Features = existing.Features
+			}
+			if len(existing.Stack) > 0 {
+				p.Stack = existing.Stack
+			}
+			if existing.Description != "" {
+				p.Description = existing.Description
+			}
+			if existing.Accent != "" {
+				p.Accent = existing.Accent
+			}
+			if existing.Mono != "" {
+				p.Mono = existing.Mono
+			}
+			if existing.Year != "" {
+				p.Year = existing.Year
+			}
+			if len(existing.Links) > 0 {
+				p.Links = existing.Links
+			}
+			p.Classification = existing.Classification
+			p.Visible = existing.Visible
+			p.Featured = existing.Featured
+		}
+
 		if err := s.UpsertProject(ctx, p); err != nil {
 			return err
 		}

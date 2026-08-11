@@ -352,12 +352,31 @@ templ AdminMessagesList(messages []store.Message) {
 }
 
 // AdminProjectsList renders project curation controls.
-templ AdminProjectsList(projects []store.Project) {
-	<div class="admin-toolbar mb-2">
+templ AdminProjectsList(projects []store.Project, msg string, errMsg string) {
+	if msg != "" {
+		<div class="form-msg ok mb-2">
+			@Icon("check-circle", 17)
+			<div>{ msg }</div>
+		</div>
+	}
+	if errMsg != "" {
+		<div class="form-msg err mb-2">
+			@Icon("alert", 17)
+			<div>{ errMsg }</div>
+		</div>
+	}
+	<div class="admin-toolbar mb-2" style="display: flex; gap: 1rem; align-items: center;">
 		<a class="btn btn-primary" href="/admin/projects/new">
 			@Icon("zap", 16)
 			New project
 		</a>
+		<form method="post" action="/admin/projects/sync" class="inline-form">
+			<input type="hidden" name="csrf" value={ csrfValue() }/>
+			<button class="btn btn-secondary" type="submit">
+				@Icon("github", 16)
+				Sync Open Source GitHub Repositories
+			</button>
+		</form>
 	</div>
 	<p class="form-note mb-2">
 		Classification determines which projects are displayed on the public site: <code>original</code> and

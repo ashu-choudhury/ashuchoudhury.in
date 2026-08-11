@@ -149,6 +149,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /admin/messages", s.adminOnly(http.HandlerFunc(s.handleAdminMessages)))
 	mux.Handle("POST /admin/messages/{id}/delete", s.adminOnly(http.HandlerFunc(s.handleAdminMessageDelete)))
 	mux.Handle("GET /admin/projects", s.adminOnly(http.HandlerFunc(s.handleAdminProjects)))
+	mux.Handle("POST /admin/projects/sync", s.adminOnly(http.HandlerFunc(s.handleAdminProjectsSync)))
 	mux.Handle("GET /admin/projects/new", s.adminOnly(http.HandlerFunc(s.handleAdminProjectNew)))
 	mux.Handle("POST /admin/projects/new", s.adminOnly(http.HandlerFunc(s.handleAdminProjectSave)))
 	mux.Handle("GET /admin/projects/{slug}/edit", s.adminOnly(http.HandlerFunc(s.handleAdminProjectEdit)))
