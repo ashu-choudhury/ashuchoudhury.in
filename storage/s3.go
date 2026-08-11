@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -71,19 +70,20 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	opts := []func(*awsconfig.LoadOptions) error{
-		awsconfig.WithRegion(cfg.Region),
+
+	region := cfg.Region
+	if region == "" {
+		region = envOr("AWS_REGION", "us-east-1")
 	}
-	if id, secret := os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"); id != "" && secret != "" {
-		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			id, secret, os.Getenv("AWS_SESSION_TOKEN"),
-		)))
-	}
-	cfgAWS, err := awsconfig.LoadDefaultConfig(context.Background(), opts...)
-	if err != nil {
-		return nil, err
-	}
-	client := s3.NewFromConfig(cfgAWS, func(o *s3.Options) {
+
+	client := s3.New(s3.Options{
+		Region: region,
+	}, func(o *s3.Options) {
+		id := os.Getenv("AWS_ACCESS_KEY_ID")
+		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+		if id != "" && secret != "" {
+			o.Credentials = credentials.NewStaticCredentialsProvider(id, secret, os.Getenv("AWS_SESSION_TOKEN"))
+		}
 		if cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 			o.UsePathStyle = true
@@ -92,6 +92,7 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 			o.HTTPClient = &httpNoVerifyClient{}
 		}
 	})
+
 	return &Backup{cfg: cfg, client: client, log: logger}, nil
 }
 
