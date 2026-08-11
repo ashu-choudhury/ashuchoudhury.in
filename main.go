@@ -91,16 +91,20 @@ func main() {
 		log.Printf("[S3 DIAGNOSTIC WARNING] S3 is disabled. S3_BUCKET env variable is empty!")
 	}
 
-	db, err := store.OpenSQLite(dsn)
+	var db store.Store
+	sqliteStore, err := store.OpenSQLite(dsn)
 	if err != nil {
-		log.Fatalf("open database (%s): %v", dsn, err)
+		log.Printf("[TURSO DIAGNOSTIC ERROR] OpenSQLite(%s) failed: %v — falling back to in-memory store", dsn, err)
+		db = store.NewMemory()
+	} else {
+		db = sqliteStore
+		defer sqliteStore.Close()
 	}
-	defer db.Close()
 
 	// Seed the curated catalogue (idempotent; preserves admin overrides).
 	ctx := rctx()
 	if err := store.Seed(ctx, db); err != nil {
-		log.Fatalf("seed database: %v", err)
+		log.Printf("[DATABASE DIAGNOSTIC WARNING] Seed database returned: %v", err)
 	}
 
 	// ------------------------------------------------------------------

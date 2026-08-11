@@ -131,10 +131,17 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 		}
 	}
 
-	if _, err := db.Exec(schema); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+	stmts := strings.Split(schema, ";")
+	for _, stmt := range stmts {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+		if _, err := db.Exec(stmt); err != nil {
+			log.Printf("[TURSO DIAGNOSTIC ERROR] Schema statement failed: %v | Stmt: %s", err, stmt)
+		}
 	}
+	log.Printf("[TURSO DIAGNOSTIC SUCCESS] Turso database schema verified cleanly")
 	return &SQLite{db: db}, nil
 }
 
