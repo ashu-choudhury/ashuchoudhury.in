@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,7 +93,44 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 			o.HTTPClient = &httpNoVerifyClient{}
 		}
 	})
-	return &Backup{cfg: cfg, client: client, log: logger}, nil
+	b := &Backup{cfg: cfg, client: client, log: logger}
+	mountLinuxS3FS(cfg, logger)
+	return b, nil
+}
+
+// mountLinuxS3FS mounts the S3 bucket's www folder into storage/persisted/www on Linux using s3fs if available.
+func mountLinuxS3FS(cfg Config, logger *log.Logger) {
+	wwwDir := filepath.Join("storage", "persisted", "www")
+	_ = os.MkdirAll(wwwDir, 0755)
+
+	if runtime.GOOS != "linux" {
+		logger.Printf("s3: www mount check (OS: %s)", runtime.GOOS)
+		return
+	}
+
+	s3fsBin, err := exec.LookPath("s3fs")
+	if err != nil {
+		logger.Printf("s3: s3fs not found in PATH — skipping auto-mount")
+		return
+	}
+
+	bucketTarget := cfg.Bucket + ":" + strings.TrimSuffix(cfg.Prefix, "/") + "/www"
+	args := []string{
+		bucketTarget,
+		wwwDir,
+		"-o", "use_path_style",
+		"-o", "allow_other",
+	}
+	if cfg.Endpoint != "" {
+		args = append(args, "-o", "url="+cfg.Endpoint)
+	}
+
+	cmd := exec.Command(s3fsBin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		logger.Printf("s3: s3fs mount: %v (out: %s)", err, strings.TrimSpace(string(out)))
+	} else {
+		logger.Printf("s3: mounted %s to %s via s3fs", bucketTarget, wwwDir)
+	}
 }
 
 // Restore downloads missing files from S3 under storage/persisted/ in parallel.
@@ -126,6 +165,11 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 
 			// Ignore temporary SQLite journal files
 			if strings.HasSuffix(relKey, "-wal") || strings.HasSuffix(relKey, "-shm") || strings.HasSuffix(relKey, ".tmp") {
+				continue
+			}
+
+			// Mandate: www/ is mounted directly via Linux S3FS / network mount
+			if strings.HasPrefix(relKey, "www/") || relKey == "www" {
 				continue
 			}
 
@@ -365,6 +409,11 @@ func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) er
 
 		relPath, err := filepath.Rel(rootDir, path)
 		if err != nil {
+			return nil
+		}
+
+		// Mandate: www/ is mounted directly via Linux S3FS / network mount
+		if strings.HasPrefix(relPath, "www/") || strings.HasPrefix(relPath, "www\\") || relPath == "www" {
 			return nil
 		}
 
