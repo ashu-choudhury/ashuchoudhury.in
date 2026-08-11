@@ -119,9 +119,10 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 
 			targetPath := filepath.Join(rootDir, filepath.FromSlash(relKey))
 
-			// Skip if file already exists locally and S3 object is not newer
+			// Skip if file exists locally with identical size and S3 object is not newer
 			if st, err := os.Stat(targetPath); err == nil {
-				if obj.LastModified != nil && !st.ModTime().Before(*obj.LastModified) {
+				objSize := aws.ToInt64(obj.Size)
+				if st.Size() == objSize && (obj.LastModified == nil || !st.ModTime().Before(*obj.LastModified)) {
 					continue
 				}
 			}
@@ -153,6 +154,10 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 			}
 			_ = f.Close()
 			out.Body.Close()
+
+			if obj.LastModified != nil {
+				_ = os.Chtimes(targetPath, *obj.LastModified, *obj.LastModified)
+			}
 			restoredCount++
 		}
 	}
