@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -92,8 +94,8 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 	return &Backup{cfg: cfg, client: client, log: logger}, nil
 }
 
-// Restore downloads missing files from S3 under storage/persisted/.
-// Existing local data is not overwritten.
+// Restore downloads missing files from S3 under storage/persisted/ in parallel.
+// Existing local data is not overwritten if size and modtime match.
 func (b *Backup) Restore(ctx context.Context, localPath string) error {
 	rootDir := filepath.Dir(localPath)
 
@@ -102,7 +104,13 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 		Prefix: aws.String(b.cfg.Prefix),
 	})
 
-	restoredCount := 0
+	type restoreTask struct {
+		key        string
+		targetPath string
+		modTime    *time.Time
+	}
+
+	var tasks []restoreTask
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -131,40 +139,73 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 				}
 			}
 
-			body, err := b.getObjectReader(ctx, key)
-			if err != nil {
-				b.log.Printf("s3: download %s failed: %v", key, err)
-				continue
-			}
-
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				body.Close()
-				continue
-			}
-
-			f, err := os.Create(targetPath)
-			if err != nil {
-				body.Close()
-				continue
-			}
-
-			if _, err := ioCopy(f, body); err != nil {
-				_ = f.Close()
-				body.Close()
-				continue
-			}
-			_ = f.Close()
-			body.Close()
-
-			if obj.LastModified != nil {
-				_ = os.Chtimes(targetPath, *obj.LastModified, *obj.LastModified)
-			}
-			restoredCount++
+			tasks = append(tasks, restoreTask{
+				key:        key,
+				targetPath: targetPath,
+				modTime:    obj.LastModified,
+			})
 		}
 	}
 
+	if len(tasks) == 0 {
+		b.log.Printf("s3: local storage synchronized (%s)", rootDir)
+		return nil
+	}
+
+	workers := 8
+	if len(tasks) < workers {
+		workers = len(tasks)
+	}
+
+	taskCh := make(chan restoreTask, len(tasks))
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	var restoredCount int64
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range taskCh {
+				body, err := b.getObjectReader(ctx, t.key)
+				if err != nil {
+					b.log.Printf("s3: download %s failed: %v", t.key, err)
+					continue
+				}
+
+				if err := os.MkdirAll(filepath.Dir(t.targetPath), 0755); err != nil {
+					body.Close()
+					continue
+				}
+
+				f, err := os.Create(t.targetPath)
+				if err != nil {
+					body.Close()
+					continue
+				}
+
+				if _, err := ioCopy(f, body); err != nil {
+					_ = f.Close()
+					body.Close()
+					continue
+				}
+				_ = f.Close()
+				body.Close()
+
+				if t.modTime != nil {
+					_ = os.Chtimes(t.targetPath, *t.modTime, *t.modTime)
+				}
+				atomic.AddInt64(&restoredCount, 1)
+			}
+		}()
+	}
+	wg.Wait()
+
 	if restoredCount > 0 {
-		b.log.Printf("s3: restored %d files into %s", restoredCount, rootDir)
+		b.log.Printf("s3: parallel-restored %d files into %s", restoredCount, rootDir)
 	} else {
 		b.log.Printf("s3: local storage synchronized (%s)", rootDir)
 	}
@@ -292,7 +333,7 @@ func getRedirectLocation(err error) string {
 	return ""
 }
 
-// Backup checkpoints the database and uploads all files inside storage/persisted/ to S3.
+// Backup checkpoints the database and uploads all files inside storage/persisted/ to S3 in parallel.
 func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) error, localPath string) error {
 	if checkpoint != nil {
 		if err := checkpoint(ctx); err != nil {
@@ -305,7 +346,12 @@ func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) er
 		return nil
 	}
 
-	uploadedCount := 0
+	type uploadTask struct {
+		path      string
+		objectKey string
+	}
+
+	var tasks []uploadTask
 	err := filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -323,35 +369,63 @@ func (b *Backup) Backup(ctx context.Context, checkpoint func(context.Context) er
 		}
 
 		objectKey := b.cfg.Prefix + filepath.ToSlash(relPath)
-
-		f, err := os.Open(path)
-		if err != nil {
-			return nil
-		}
-		defer f.Close()
-
-		_, err = b.client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket:       aws.String(b.cfg.Bucket),
-			Key:          aws.String(objectKey),
-			Body:         f,
-			ContentType:  aws.String(detectContentType(path)),
-			StorageClass: "STANDARD",
-		})
-		if err != nil {
-			b.log.Printf("s3: upload %s failed: %v", objectKey, err)
-			return nil
-		}
-
-		uploadedCount++
+		tasks = append(tasks, uploadTask{path: path, objectKey: objectKey})
 		return nil
 	})
 
 	if err != nil {
 		b.log.Printf("s3: directory walk %s: %v", rootDir, err)
-	} else {
-		b.log.Printf("s3: backed up %d files to %s", uploadedCount, b.cfg.Prefix)
+		return nil
 	}
 
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	workers := 8
+	if len(tasks) < workers {
+		workers = len(tasks)
+	}
+
+	taskCh := make(chan uploadTask, len(tasks))
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	var uploadedCount int64
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range taskCh {
+				f, err := os.Open(t.path)
+				if err != nil {
+					continue
+				}
+
+				_, err = b.client.PutObject(ctx, &s3.PutObjectInput{
+					Bucket:       aws.String(b.cfg.Bucket),
+					Key:          aws.String(t.objectKey),
+					Body:         f,
+					ContentType:  aws.String(detectContentType(t.path)),
+					StorageClass: "STANDARD",
+				})
+				_ = f.Close()
+
+				if err != nil {
+					b.log.Printf("s3: upload %s failed: %v", t.objectKey, err)
+					continue
+				}
+
+				atomic.AddInt64(&uploadedCount, 1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	b.log.Printf("s3: parallel backed up %d files to %s", uploadedCount, b.cfg.Prefix)
 	return nil
 }
 
