@@ -219,36 +219,35 @@ func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser
 		return out.Body, nil
 	}
 
-	if strings.Contains(err.Error(), "StatusCode: 302") || strings.Contains(err.Error(), "Found") {
+	if strings.Contains(err.Error(), "302") || strings.Contains(err.Error(), "Found") {
+		base := strings.TrimSuffix(b.cfg.Endpoint, "/")
+		bucket := b.cfg.Bucket
+		cleanKey := strings.TrimPrefix(key, "/")
+
 		var reqURL string
-		if b.cfg.Endpoint != "" {
-			reqURL = strings.TrimSuffix(b.cfg.Endpoint, "/") + "/" + b.cfg.Bucket + "/" + strings.TrimPrefix(key, "/")
+		if base != "" {
+			if strings.HasSuffix(base, "/"+bucket) {
+				reqURL = base + "/" + cleanKey
+			} else {
+				reqURL = base + "/" + bucket + "/" + cleanKey
+			}
 		} else {
-			reqURL = "https://" + b.cfg.Bucket + ".s3." + b.cfg.Region + ".amazonaws.com/" + strings.TrimPrefix(key, "/")
+			reqURL = "https://" + bucket + ".s3." + b.cfg.Region + ".amazonaws.com/" + cleanKey
 		}
 
 		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-		if reqErr != nil {
-			return nil, err
-		}
-
-		if id, secret := os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"); id != "" && secret != "" {
-			req.SetBasicAuth(id, secret)
-		}
-
-		client := &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return nil
-			},
-			Timeout: 120 * time.Second,
-		}
-
-		resp, respErr := client.Do(req)
-		if respErr == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) {
-			return resp.Body, nil
-		}
-		if resp != nil {
-			_ = resp.Body.Close()
+		if reqErr == nil {
+			client := &http.Client{
+				Timeout: 120 * time.Second,
+			}
+			resp, respErr := client.Do(req)
+			if respErr == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) {
+				b.log.Printf("s3: followed 302 redirect successfully for %s", key)
+				return resp.Body, nil
+			}
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
 		}
 	}
 
