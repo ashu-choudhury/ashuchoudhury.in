@@ -334,7 +334,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		s3BucketEnv = "configured"
 	}
 
-	fmt.Fprintf(w, `{"status":"%s","store_type":"%s","database":"%s","ping_ms":%d,"s3_storage":"%s","env_checks":{"TURSO_DATABASE_URL":"%s","TURSO_AUTH_TOKEN":"%s","S3_BUCKET":"%s"}}`,
-		status, storeType, dbStatus, latency, s3Status, tursoURLEnv, tursoTokenEnv, s3BucketEnv)
+	awsKeyEnv := "missing"
+	if os.Getenv("AWS_ACCESS_KEY_ID") != "" || os.Getenv("S3_ACCESS_KEY_ID") != "" || os.Getenv("S3_ACCESS_KEY") != "" {
+		awsKeyEnv = "configured"
+	}
+
+	awsSecretEnv := "missing"
+	if os.Getenv("AWS_SECRET_ACCESS_KEY") != "" || os.Getenv("S3_SECRET_ACCESS_KEY") != "" || os.Getenv("S3_SECRET_KEY") != "" {
+		awsSecretEnv = "configured"
+	}
+
+	fmt.Fprintf(w, `{"status":"%s","store_type":"%s","database":"%s","ping_ms":%d,"s3_storage":"%s","env_checks":{"TURSO_DATABASE_URL":"%s","TURSO_AUTH_TOKEN":"%s","S3_BUCKET":"%s","AWS_ACCESS_KEY_ID":"%s","AWS_SECRET_ACCESS_KEY":"%s"}}`,
+		status, storeType, dbStatus, latency, s3Status, tursoURLEnv, tursoTokenEnv, s3BucketEnv, awsKeyEnv, awsSecretEnv)
 }
 

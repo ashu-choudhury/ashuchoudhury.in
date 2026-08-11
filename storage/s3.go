@@ -81,10 +81,33 @@ func NewBackup(cfg Config, logger *log.Logger) (*Backup, error) {
 		UsePathStyle: true,
 	}
 
-	id := os.Getenv("AWS_ACCESS_KEY_ID")
-	secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	id := strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID"))
+	if id == "" {
+		id = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID"))
+	}
+	if id == "" {
+		id = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY"))
+	}
+
+	secret := strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
+	if secret == "" {
+		secret = strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY"))
+	}
+	if secret == "" {
+		secret = strings.TrimSpace(os.Getenv("S3_SECRET_KEY"))
+	}
+
+	sessionToken := strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
+
 	if id != "" && secret != "" {
-		options.Credentials = credentials.NewStaticCredentialsProvider(id, secret, os.Getenv("AWS_SESSION_TOKEN"))
+		options.Credentials = credentials.NewStaticCredentialsProvider(id, secret, sessionToken)
+		keyPreview := id
+		if len(keyPreview) > 4 {
+			keyPreview = keyPreview[:4] + "..."
+		}
+		logger.Printf("[S3 DIAGNOSTIC SUCCESS] Static S3 credentials configured cleanly (AccessKey: '%s')", keyPreview)
+	} else {
+		logger.Printf("[S3 DIAGNOSTIC ERROR] AWS_ACCESS_KEY_ID / S3_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is missing! S3 calls will fail with '403 Signature is required'")
 	}
 
 	if cfg.Endpoint != "" {
