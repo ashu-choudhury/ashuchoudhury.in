@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, keeps CGO_ENABLED=0 single-binary builds
+	_ "github.com/tursodatabase/libsql-client-go/libsql" // Turso cloud SQLite over network
+	_ "modernc.org/sqlite"                              // pure-Go SQLite driver for local/memory fallback
 )
 
 // schema is applied on every boot; it is idempotent (IF NOT EXISTS).
@@ -59,25 +62,6 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published, published_at);
 
-CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
-	slug, title, summary, body,
-	content='posts', content_rowid='id'
-);
-CREATE TRIGGER IF NOT EXISTS posts_ai AFTER INSERT ON posts BEGIN
-	INSERT INTO posts_fts(rowid, slug, title, summary, body)
-	VALUES (new.id, new.slug, new.title, new.summary, new.body);
-END;
-CREATE TRIGGER IF NOT EXISTS posts_ad AFTER DELETE ON posts BEGIN
-	INSERT INTO posts_fts(posts_fts, rowid, slug, title, summary, body)
-	VALUES ('delete', old.id, old.slug, old.title, old.summary, old.body);
-END;
-CREATE TRIGGER IF NOT EXISTS posts_au AFTER UPDATE ON posts BEGIN
-	INSERT INTO posts_fts(posts_fts, rowid, slug, title, summary, body)
-	VALUES ('delete', old.id, old.slug, old.title, old.summary, old.body);
-	INSERT INTO posts_fts(rowid, slug, title, summary, body)
-	VALUES (new.id, new.slug, new.title, new.summary, new.body);
-END;
-
 CREATE TABLE IF NOT EXISTS messages (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
 	name       TEXT NOT NULL,
@@ -111,31 +95,42 @@ type SQLite struct {
 	db *sql.DB
 }
 
-// OpenSQLite opens (creating if needed) the database at dsn and applies the
-// schema. Use ":memory:" for an ephemeral database (tests, demos).
+// OpenSQLite opens the database at dsn and applies the schema.
+// Supports both local file / :memory: and Turso cloud (libsql://...).
 func OpenSQLite(dsn string) (*SQLite, error) {
-	// Ensure the parent directory exists for file-backed databases (e.g.
-	// storage/persisted/portfolio.db) so a fresh checkout just works.
-	if dsn != ":memory:" {
-		if dir := filepath.Dir(dsn); dir != "." && dir != "" {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, fmt.Errorf("create db dir: %w", err)
+	driver := "sqlite"
+	isTurso := strings.HasPrefix(dsn, "libsql://") || strings.HasPrefix(dsn, "http://") || strings.HasPrefix(dsn, "https://")
+
+	if isTurso {
+		driver = "libsql"
+		token := os.Getenv("TURSO_AUTH_TOKEN")
+		if token != "" && !strings.Contains(dsn, "authToken=") {
+			if strings.Contains(dsn, "?") {
+				dsn += "&authToken=" + url.QueryEscape(token)
+			} else {
+				dsn += "?authToken=" + url.QueryEscape(token)
 			}
 		}
+		log.Printf("[TURSO DIAGNOSTIC] Connecting to Turso cloud database (%s)", driver)
+	} else if dsn != ":memory:" {
+		if dir := filepath.Dir(dsn); dir != "." && dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
+		}
 	}
-	db, err := sql.Open("sqlite", dsn)
+
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, fmt.Errorf("open sqlite (%s): %w", driver, err)
 	}
-	// modernc.org/sqlite: a single connection avoids SQLITE_BUSY on writes.
-	db.SetMaxOpenConns(1)
-	// WAL mode lets a second process (e.g. the GitHub importer) read and
-	// write while the site server is running; busy_timeout waits instead
-	// of failing immediately when a write lock is momentarily held.
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("configure sqlite: %w", err)
+
+	if !isTurso {
+		db.SetMaxOpenConns(1)
+		if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("configure sqlite: %w", err)
+		}
 	}
+
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)

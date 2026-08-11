@@ -64,30 +64,15 @@ func main() {
 	// Database: the store is the center point. Swap implementations here —
 	// store.OpenSQLite (persistent) or store.NewMemory (ephemeral) — and
 	// nothing else in the application changes.
-	dsn := os.Getenv("DB_PATH")
+	dsn := os.Getenv("TURSO_DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	if dsn == "" {
+		dsn = os.Getenv("DB_PATH")
+	}
 	if dsn == "" {
 		dsn = filepath.Join("storage", "persisted", "portfolio.db")
-		// One-time migration: databases created before the storage/persisted/
-		// layout live at ./portfolio.db in the working directory. Move the
-		// file (and any WAL/SHM sidecars) into the new location so existing
-		// data survives the layout change.
-		legacy := "portfolio.db"
-		if _, err := os.Stat(dsn); os.IsNotExist(err) {
-			if _, err := os.Stat(legacy); err == nil {
-				if err := os.MkdirAll(filepath.Dir(dsn), 0o755); err != nil {
-					log.Fatalf("create persisted dir: %v", err)
-				}
-				for _, suffix := range []string{"", "-wal", "-shm"} {
-					src, dst := legacy+suffix, dsn+suffix
-					if _, err := os.Stat(src); err == nil {
-						if err := os.Rename(src, dst); err != nil {
-							log.Fatalf("migrate %s → %s: %v", src, dst, err)
-						}
-					}
-				}
-				log.Printf("migrated legacy database %s → %s", legacy, dsn)
-			}
-		}
 	}
 
 	// ------------------------------------------------------------------
