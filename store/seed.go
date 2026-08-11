@@ -22,9 +22,13 @@ func Seed(ctx context.Context, s Store) error {
 	if err := s.RenameProjectSlug(ctx, "my-app", "blind-tech-community"); err != nil {
 		return err
 	}
-	for _, p := range seedProjects {
-		if err := s.UpsertProject(ctx, p); err != nil {
-			return err
+
+	existingProjects, err := s.ListProjects(ctx)
+	if err == nil && len(existingProjects) == 0 {
+		for _, p := range seedProjects {
+			if err := s.UpsertProject(ctx, p); err != nil {
+				return err
+			}
 		}
 	}
 	// One welcome post so the blog has a starting point (only if empty).

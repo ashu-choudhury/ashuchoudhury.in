@@ -68,9 +68,14 @@ func (s *Server) analytics(next http.Handler) http.Handler {
 			return
 		}
 		day := time.Now().UTC().Format("2006-01-02")
-		if err := s.Store.RecordPageView(r.Context(), day, r.URL.Path); err != nil {
-			log.Printf("analytics: record %s: %v", r.URL.Path, err)
-		}
+		path := r.URL.Path
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.Store.RecordPageView(bgCtx, day, path); err != nil {
+				log.Printf("analytics: record %s: %v", path, err)
+			}
+		}()
 	})
 }
 
@@ -182,13 +187,26 @@ func (s *Server) newSessionToken(w http.ResponseWriter) (string, error) {
 	}
 	token := hex.EncodeToString(b)
 	now := time.Now()
-	if err := s.Store.CreateSession(rctx(), store.Session{
+	sess := store.Session{
 		Token:     token,
 		CreatedAt: now,
 		ExpiresAt: now.Add(7 * 24 * time.Hour),
-	}); err != nil {
+	}
+
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = s.Store.CreateSession(ctx, sess)
+		cancel()
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil {
 		return "", err
 	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,

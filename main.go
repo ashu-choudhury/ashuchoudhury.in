@@ -101,11 +101,14 @@ func main() {
 		defer sqliteStore.Close()
 	}
 
-	// Seed the curated catalogue (idempotent; preserves admin overrides).
-	ctx := rctx()
-	if err := store.Seed(ctx, db); err != nil {
-		log.Printf("[DATABASE DIAGNOSTIC WARNING] Seed database returned: %v", err)
-	}
+	// Seed the curated catalogue asynchronously (non-blocking for fast server cold-starts).
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := store.Seed(bgCtx, db); err != nil {
+			log.Printf("[DATABASE DIAGNOSTIC WARNING] Seed database returned: %v", err)
+		}
+	}()
 
 	// ------------------------------------------------------------------
 	// Static assets from the embedded filesystem.

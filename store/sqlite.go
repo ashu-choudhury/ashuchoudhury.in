@@ -123,7 +123,11 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 		return nil, fmt.Errorf("open sqlite (%s): %w", driver, err)
 	}
 
-	if !isTurso {
+	if isTurso {
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxLifetime(5 * time.Minute)
+	} else if dsn != ":memory:" {
 		db.SetMaxOpenConns(1)
 		if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
 			_ = db.Close()
@@ -131,17 +135,20 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 		}
 	}
 
-	stmts := strings.Split(schema, ";")
-	for _, stmt := range stmts {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		if _, err := db.Exec(stmt); err != nil {
-			log.Printf("[TURSO DIAGNOSTIC ERROR] Schema statement failed: %v | Stmt: %s", err, stmt)
+	if _, err := db.Exec(schema); err != nil {
+		log.Printf("[TURSO DIAGNOSTIC WARNING] Batch schema execution returned error: %v — falling back to statement-by-statement execution", err)
+		stmts := strings.Split(schema, ";")
+		for _, stmt := range stmts {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := db.Exec(stmt); err != nil {
+				log.Printf("[TURSO DIAGNOSTIC ERROR] Schema statement failed: %v | Stmt: %s", err, stmt)
+			}
 		}
 	}
-	log.Printf("[TURSO DIAGNOSTIC SUCCESS] Turso database schema verified cleanly")
+	log.Printf("[TURSO DIAGNOSTIC SUCCESS] Database schema verified cleanly")
 	return &SQLite{db: db}, nil
 }
 
