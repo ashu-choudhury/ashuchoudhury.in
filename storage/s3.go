@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Config carries the S3 backup settings, populated from the environment.
@@ -219,6 +221,24 @@ func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser
 		return out.Body, nil
 	}
 
+	// Extract presigned 302 Location URL header from AWS SDK error
+	loc := getRedirectLocation(err)
+	if loc != "" {
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, loc, nil)
+		if reqErr == nil {
+			client := &http.Client{Timeout: 120 * time.Second}
+			resp, respErr := client.Do(req)
+			if respErr == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) {
+				b.log.Printf("s3: followed 302 Location redirect for %s", key)
+				return resp.Body, nil
+			}
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+		}
+	}
+
+	// Fallback manual URL formatting if Location header was not in error response
 	if strings.Contains(err.Error(), "302") || strings.Contains(err.Error(), "Found") {
 		base := strings.TrimSuffix(b.cfg.Endpoint, "/")
 		bucket := b.cfg.Bucket
@@ -237,12 +257,10 @@ func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser
 
 		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 		if reqErr == nil {
-			client := &http.Client{
-				Timeout: 120 * time.Second,
-			}
+			client := &http.Client{Timeout: 120 * time.Second}
 			resp, respErr := client.Do(req)
 			if respErr == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) {
-				b.log.Printf("s3: followed 302 redirect successfully for %s", key)
+				b.log.Printf("s3: followed manual 302 redirect for %s", key)
 				return resp.Body, nil
 			}
 			if resp != nil {
@@ -252,6 +270,26 @@ func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser
 	}
 
 	return nil, err
+}
+
+func getRedirectLocation(err error) string {
+	if err == nil {
+		return ""
+	}
+	var respErr *smithyhttp.ResponseError
+	if errors.As(err, &respErr) && respErr.Response != nil {
+		if loc := respErr.Response.Header.Get("Location"); loc != "" {
+			return loc
+		}
+	}
+	errStr := err.Error()
+	if idx := strings.Index(errStr, "http://"); idx != -1 {
+		return strings.Fields(errStr[idx:])[0]
+	}
+	if idx := strings.Index(errStr, "https://"); idx != -1 {
+		return strings.Fields(errStr[idx:])[0]
+	}
+	return ""
 }
 
 // Backup checkpoints the database and uploads all files inside storage/persisted/ to S3.
