@@ -295,6 +295,34 @@ func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) err
 	return nil
 }
 
+// StreamFile streams a public file directly from S3 to the client (S3 Reverse Proxy).
+// Works everywhere (Vercel, Render, Lambda) without needing local disk writes or FUSE mounts.
+func (b *Backup) StreamFile(w http.ResponseWriter, r *http.Request, relKey string) bool {
+	cleanRel := strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+	if unescaped, err := url.PathUnescape(cleanRel); err == nil && unescaped != "" {
+		cleanRel = unescaped
+	}
+
+	s3Key := b.cfg.Prefix + "www/" + cleanRel
+	body, err := b.getObjectReader(r.Context(), s3Key)
+	if err != nil {
+		rawS3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
+		if rawS3Key != s3Key {
+			body, err = b.getObjectReader(r.Context(), rawS3Key)
+		}
+		if err != nil {
+			return false
+		}
+	}
+	defer body.Close()
+
+	w.Header().Set("Content-Type", detectContentType(cleanRel))
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = ioCopy(w, body)
+	b.log.Printf("s3: streamed missing file directly from S3: %s", s3Key)
+	return true
+}
+
 // getObjectReader fetches an object stream from S3. Handles 302 Found redirects automatically
 // for providers like Hugging Face S3 (s3.hf.co).
 func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser, error) {

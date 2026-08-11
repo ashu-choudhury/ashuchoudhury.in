@@ -86,7 +86,7 @@ func (s *Server) staticHandler() http.Handler {
 }
 
 // filesHandler serves public uploads directly from storage/persisted/www.
-// If a file is missing locally, it lazy-restores it from S3 on demand.
+// If a file is missing locally, it lazy-restores to disk or streams directly from S3 (S3 Reverse Proxy).
 func (s *Server) filesHandler() http.Handler {
 	wwwDir := filepath.Join("storage", "persisted", "www")
 	_ = os.MkdirAll(wwwDir, 0755)
@@ -99,8 +99,23 @@ func (s *Server) filesHandler() http.Handler {
 		}
 		localPath := filepath.Join(wwwDir, filepath.FromSlash(relPath))
 
-		if _, err := os.Stat(localPath); os.IsNotExist(err) && s.backup != nil {
-			_ = s.backup.RestoreFile(r.Context(), relPath, localPath)
+		// If local file exists, serve it directly via FileServer
+		if st, err := os.Stat(localPath); err == nil && !st.IsDir() {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// If missing locally and S3 is enabled:
+		if s.backup != nil {
+			// Try lazy restoring to disk first
+			if err := s.backup.RestoreFile(r.Context(), relPath, localPath); err == nil {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			// If disk is read-only (e.g. Vercel) or restore failed, stream directly from S3
+			if s.backup.StreamFile(w, r, relPath) {
+				return
+			}
 		}
 
 		fileServer.ServeHTTP(w, r)
