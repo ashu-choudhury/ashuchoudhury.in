@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -127,33 +129,30 @@ func (b *Backup) Restore(ctx context.Context, localPath string) error {
 				}
 			}
 
-			out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
-				Bucket: aws.String(b.cfg.Bucket),
-				Key:    aws.String(key),
-			})
+			body, err := b.getObjectReader(ctx, key)
 			if err != nil {
 				b.log.Printf("s3: download %s failed: %v", key, err)
 				continue
 			}
 
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				out.Body.Close()
+				body.Close()
 				continue
 			}
 
 			f, err := os.Create(targetPath)
 			if err != nil {
-				out.Body.Close()
+				body.Close()
 				continue
 			}
 
-			if _, err := ioCopy(f, out.Body); err != nil {
+			if _, err := ioCopy(f, body); err != nil {
 				_ = f.Close()
-				out.Body.Close()
+				body.Close()
 				continue
 			}
 			_ = f.Close()
-			out.Body.Close()
+			body.Close()
 
 			if obj.LastModified != nil {
 				_ = os.Chtimes(targetPath, *obj.LastModified, *obj.LastModified)
@@ -179,25 +178,18 @@ func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) err
 	}
 
 	s3Key := b.cfg.Prefix + "www/" + cleanRel
-	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(b.cfg.Bucket),
-		Key:    aws.String(s3Key),
-	})
+	body, err := b.getObjectReader(ctx, s3Key)
 	if err != nil {
-		// Fallback: try raw relKey if unescaped key differed
 		rawS3Key := b.cfg.Prefix + "www/" + strings.TrimPrefix(filepath.ToSlash(relKey), "/")
 		if rawS3Key != s3Key {
-			out, err = b.client.GetObject(ctx, &s3.GetObjectInput{
-				Bucket: aws.String(b.cfg.Bucket),
-				Key:    aws.String(rawS3Key),
-			})
+			body, err = b.getObjectReader(ctx, rawS3Key)
 		}
 		if err != nil {
 			b.log.Printf("s3: restore file failed for %s (%s): %v", relKey, s3Key, err)
 			return err
 		}
 	}
-	defer out.Body.Close()
+	defer body.Close()
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 		return err
@@ -209,11 +201,58 @@ func (b *Backup) RestoreFile(ctx context.Context, relKey, targetPath string) err
 	}
 	defer f.Close()
 
-	if _, err := ioCopy(f, out.Body); err != nil {
+	if _, err := ioCopy(f, body); err != nil {
 		return err
 	}
 	b.log.Printf("s3: lazy-restored missing file %s -> %s", s3Key, targetPath)
 	return nil
+}
+
+// getObjectReader fetches an object stream from S3. Handles 302 Found redirects automatically
+// for providers like Hugging Face S3 (s3.hf.co).
+func (b *Backup) getObjectReader(ctx context.Context, key string) (io.ReadCloser, error) {
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(b.cfg.Bucket),
+		Key:    aws.String(key),
+	})
+	if err == nil {
+		return out.Body, nil
+	}
+
+	if strings.Contains(err.Error(), "StatusCode: 302") || strings.Contains(err.Error(), "Found") {
+		var reqURL string
+		if b.cfg.Endpoint != "" {
+			reqURL = strings.TrimSuffix(b.cfg.Endpoint, "/") + "/" + b.cfg.Bucket + "/" + strings.TrimPrefix(key, "/")
+		} else {
+			reqURL = "https://" + b.cfg.Bucket + ".s3." + b.cfg.Region + ".amazonaws.com/" + strings.TrimPrefix(key, "/")
+		}
+
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if reqErr != nil {
+			return nil, err
+		}
+
+		if id, secret := os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"); id != "" && secret != "" {
+			req.SetBasicAuth(id, secret)
+		}
+
+		client := &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return nil
+			},
+			Timeout: 120 * time.Second,
+		}
+
+		resp, respErr := client.Do(req)
+		if respErr == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) {
+			return resp.Body, nil
+		}
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+	}
+
+	return nil, err
 }
 
 // Backup checkpoints the database and uploads all files inside storage/persisted/ to S3.
