@@ -18,7 +18,7 @@ RUN mkdir -p /out/storage/persisted
 # Runtime stage: Alpine base with s3fs & fuse for direct S3 www folder mounting.
 FROM alpine:latest
 
-RUN apk add --no-cache s3fs fuse ca-certificates tzdata
+RUN apk add --no-cache s3fs-fuse fuse ca-certificates tzdata
 
 COPY --from=build /out/portfolio /portfolio
 COPY entrypoint.sh /entrypoint.sh
