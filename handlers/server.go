@@ -129,9 +129,10 @@ func (s *Server) Handler() http.Handler {
 	// HTMX endpoints
 	mux.HandleFunc("GET /theme/toggle", s.handleThemeToggle)
 
-	// SEO
+	// SEO & Diagnostics
 	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /robots.txt", s.handleRobots)
+	mux.HandleFunc("GET /health", s.handleHealth)
 
 	// Admin
 	mux.HandleFunc("GET /admin/login", s.handleAdminLoginPage)

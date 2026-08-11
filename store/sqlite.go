@@ -159,8 +159,13 @@ func OpenSQLite(dsn string) (*SQLite, error) {
 			}
 		}
 	}
-	log.Printf("[TURSO DIAGNOSTIC SUCCESS] Database schema verified cleanly")
+	log.Printf("[DATABASE DIAGNOSTIC SUCCESS] Database schema verified cleanly")
 	return &SQLite{db: db}, nil
+}
+
+// Ping implements Store.
+func (s *SQLite) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }
 
 // Close implements Store.

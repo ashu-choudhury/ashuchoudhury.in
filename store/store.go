@@ -163,6 +163,9 @@ type Store interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 	SetSetting(ctx context.Context, key, value string) error
 
+	// Ping checks database connectivity and health.
+	Ping(ctx context.Context) error
+
 	// Close releases the underlying resources.
 	Close() error
 }

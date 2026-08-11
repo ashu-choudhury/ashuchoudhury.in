@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"net/mail"
@@ -294,5 +295,23 @@ func parseRepoOwnerAndName(repoURL, slug string) (string, string) {
 		}
 	}
 	return importer.DefaultOwner, slug
+}
+
+// handleHealth returns a JSON diagnostic report of database connection status and ping latency.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	start := time.Now()
+	err := s.Store.Ping(r.Context())
+	latency := time.Since(start).Milliseconds()
+
+	status := "ok"
+	dbStatus := "connected"
+	if err != nil {
+		status = "degraded"
+		dbStatus = "error: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	fmt.Fprintf(w, `{"status":"%s","database":"%s","ping_ms":%d}`, status, dbStatus, latency)
 }
 

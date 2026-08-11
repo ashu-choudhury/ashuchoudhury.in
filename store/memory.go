@@ -393,3 +393,8 @@ func (m *Memory) SetSetting(ctx context.Context, key, value string) error {
 	m.settings[key] = value
 	return nil
 }
+
+// Ping implements Store.
+func (m *Memory) Ping(ctx context.Context) error {
+	return nil
+}
