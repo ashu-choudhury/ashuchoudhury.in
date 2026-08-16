@@ -209,6 +209,7 @@ func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.TriggerBackup(ctx)
+	s.NotifySearchEngines()
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
 }
 
@@ -255,6 +256,7 @@ func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.Store.DeletePost(r.Context(), id)
 	s.TriggerBackup(r.Context())
+	s.NotifySearchEngines()
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
 }
 
@@ -423,6 +425,7 @@ func (s *Server) handleAdminProjectsSync(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	s.TriggerBackup(r.Context())
+	s.NotifySearchEngines()
 	http.Redirect(w, r, "/admin/projects?msg="+url.QueryEscape("Synced open-source repositories from GitHub successfully."), http.StatusSeeOther)
 }
 
@@ -461,6 +464,7 @@ func (s *Server) handleAdminProjectSave(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.TriggerBackup(r.Context())
+	s.NotifySearchEngines()
 	http.Redirect(w, r, "/admin/projects", http.StatusSeeOther)
 }
 
@@ -470,6 +474,7 @@ func (s *Server) handleAdminProjectDelete(w http.ResponseWriter, r *http.Request
 		log.Printf("admin delete project %s: %v", slug, err)
 	}
 	s.TriggerBackup(r.Context())
+	s.NotifySearchEngines()
 	http.Redirect(w, r, "/admin/projects", http.StatusSeeOther)
 }
 

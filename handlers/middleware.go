@@ -68,6 +68,15 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
+// setEdgeCache marks a response as CDN-edge-cacheable: served from the
+// edge (s-maxage) with a stale-while-revalidate fallback, so crawlers get
+// an instant answer even while the origin container is cold-starting.
+// Only for stable, low-churn endpoints (robots.txt, sitemap.xml, llms.txt,
+// the IndexNow key file).
+func setEdgeCache(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400")
+}
+
 // redirectTrailingSlash 301s /path/ to /path (except the root), preserving
 // the query string. Every page has exactly one URL, so crawlers never see
 // duplicate trailing-slash variants.
@@ -125,6 +134,9 @@ func (s *Server) countView(r *http.Request) bool {
 	if p == "/sitemap.xml" || p == "/robots.txt" || p == "/llms.txt" || p == "/favicon.ico" {
 		return false
 	}
+	if s.indexNowKey != "" && p == "/"+s.indexNowKey+".txt" {
+		return false
+	}
 	ua := strings.ToLower(r.UserAgent())
 	if strings.Contains(ua, "bot") || strings.Contains(ua, "crawl") || strings.Contains(ua, "spider") {
 		return false
@@ -154,6 +166,9 @@ func (s *Server) adminOnly(next http.Handler) http.Handler {
 
 // csrfGuard validates the csrf field on admin POST requests. Supports double-submit
 // cookies so CSRF protection works reliably across multi-instance serverless containers.
+// The cookie is only issued on /admin requests so public (and SEO) responses stay
+// Set-Cookie-free — required for Vercel's edge cache to serve robots.txt/sitemap/llms.txt
+// without a cold-start hit.
 func (s *Server) csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := ""
@@ -161,12 +176,14 @@ func (s *Server) csrfGuard(next http.Handler) http.Handler {
 			token = cookie.Value
 		} else {
 			token = randomHexToken(24)
-			http.SetCookie(w, &http.Cookie{
-				Name:     csrfCookieName,
-				Value:    token,
-				Path:     "/",
-				SameSite: http.SameSiteLaxMode,
-			})
+			if strings.HasPrefix(r.URL.Path, "/admin") {
+				http.SetCookie(w, &http.Cookie{
+					Name:     csrfCookieName,
+					Value:    token,
+					Path:     "/",
+					SameSite: http.SameSiteLaxMode,
+				})
+			}
 		}
 
 		components.SetCSRFToken(token)

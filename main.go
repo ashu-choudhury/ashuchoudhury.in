@@ -21,6 +21,7 @@
 //	DB_PATH          SQLite database file (default storage/persisted/portfolio.db)
 //	ADMIN_USER       admin username (default admin)
 //	ADMIN_PASSWORD   admin password (default admin — set it!)
+//	INDEXNOW_KEY     IndexNow key — enables automatic Bing/Yandex/etc. pings
 //
 // Persistence (all optional, all from the environment — nothing hardcoded):
 //
@@ -146,6 +147,11 @@ func main() {
 	if backup != nil {
 		server.SetBackup(backup, dsn)
 	}
+
+	// Ping search engines with the sitemap on every boot (also covers the
+	// startup project dedupe). No-op without INDEXNOW_KEY.
+	go server.NotifySearchEngines()
+
 
 	addr := os.Getenv("PORT")
 	if addr == "" {

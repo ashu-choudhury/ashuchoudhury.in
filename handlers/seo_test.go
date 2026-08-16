@@ -55,13 +55,20 @@ func TestRobotsTXT(t *testing.T) {
 		"Allow: /",
 		"Disallow: /admin",
 		"Sitemap: https://ashuchoudhury.in/sitemap.xml",
+		// AI crawlers are explicitly welcome.
+		"User-agent: GPTBot",
+		"User-agent: OAI-SearchBot",
+		"User-agent: PerplexityBot",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("robots.txt missing %q; got:\n%s", want, body)
 		}
 	}
-	if ct := rec.Header().Get("Cache-Control"); ct == "" {
-		t.Error("robots.txt should set Cache-Control")
+	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "s-maxage") {
+		t.Errorf("robots.txt Cache-Control should include s-maxage for edge caching: %q", cc)
+	}
+	if sc := rec.Header().Get("Set-Cookie"); sc != "" {
+		t.Errorf("robots.txt must not Set-Cookie (blocks edge caching), got %q", sc)
 	}
 }
 
@@ -92,6 +99,12 @@ func TestSitemapXML(t *testing.T) {
 	}
 	if strings.Contains(body, "/admin") {
 		t.Error("sitemap must not include admin paths")
+	}
+	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "s-maxage") {
+		t.Errorf("sitemap Cache-Control should include s-maxage: %q", cc)
+	}
+	if sc := rec.Header().Get("Set-Cookie"); sc != "" {
+		t.Errorf("sitemap must not Set-Cookie, got %q", sc)
 	}
 }
 
@@ -150,6 +163,20 @@ func TestCSPAllowlistsInlinedStyle(t *testing.T) {
 	csp := rec2.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "style-src 'self' 'sha256-abcdef'") {
 		t.Errorf("CSP missing quoted inlined-style hash: %q", csp)
+	}
+}
+
+func TestIndexNowKeyFile(t *testing.T) {
+	srv := New(seedSEOStore(t), nil)
+	srv.indexNowKey = "8fb70f93-8394-47bf-b405-457d216d3015"
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/8fb70f93-8394-47bf-b405-457d216d3015.txt", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("key file status = %d, want 200", rec.Code)
+	}
+	if body := rec.Body.String(); body != srv.indexNowKey {
+		t.Errorf("key file body = %q, want %q", body, srv.indexNowKey)
 	}
 }
 

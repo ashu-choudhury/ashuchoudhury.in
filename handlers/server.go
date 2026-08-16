@@ -21,14 +21,15 @@ import (
 
 // Server holds the application's dependencies and routes.
 type Server struct {
-	Store     store.Store
-	staticFS  fs.FS // embedded static assets (passed in from main)
-	startedAt time.Time
-	loginHits map[string][]time.Time
-	adminUser string
-	adminHash []byte
-	backup    *storage.Backup
-	dbPath    string
+	Store       store.Store
+	staticFS    fs.FS // embedded static assets (passed in from main)
+	startedAt   time.Time
+	loginHits   map[string][]time.Time
+	adminUser   string
+	adminHash   []byte
+	backup      *storage.Backup
+	dbPath      string
+	indexNowKey string // IndexNow key; empty disables search-engine pings
 }
 
 // SetBackup attaches the S3 backup pipeline to the server for instant write sync.
@@ -57,10 +58,11 @@ func (s *Server) TriggerBackup(ctx context.Context) {
 // stored settings and prepares the admin account.
 func New(st store.Store, staticFS fs.FS) *Server {
 	s := &Server{
-		Store:     st,
-		staticFS:  staticFS,
-		startedAt: time.Now(),
-		loginHits: map[string][]time.Time{},
+		Store:       st,
+		staticFS:    staticFS,
+		startedAt:   time.Now(),
+		loginHits:   map[string][]time.Time{},
+		indexNowKey: os.Getenv("INDEXNOW_KEY"),
 	}
 	s.initAdmin()
 	s.applySettings()
@@ -138,6 +140,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /robots.txt", s.handleRobots)
 	mux.HandleFunc("GET /llms.txt", s.handleLLMSTXT)
+	if s.indexNowKey != "" {
+		// IndexNow requires a key file at /<key>.txt proving ownership.
+		mux.HandleFunc("GET /"+s.indexNowKey+".txt", s.handleIndexNowKey)
+	}
 	mux.HandleFunc("GET /health", s.handleHealth)
 
 	// Admin

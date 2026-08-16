@@ -285,9 +285,35 @@ func SitemapXML(paths ...string) string {
 }
 
 // RobotsTXT renders robots.txt: allow the whole public site, explicitly
-// block the admin panel, and point crawlers at the sitemap.
+// block the admin panel, welcome every major AI assistant/search/training
+// crawler, and point crawlers at the sitemap. "User-agent: *" already
+// permits all of them — the explicit list is a documented statement that
+// the site's content may be crawled and used for AI training.
 func RobotsTXT() string {
-	return "User-agent: *\nAllow: /\nDisallow: /admin\n\nSitemap: " + URL("/sitemap.xml") + "\n"
+	aiCrawlers := []string{
+		// OpenAI: training + search
+		"GPTBot", "OAI-SearchBot", "ChatGPT-User",
+		// Google: Gemini training (Google-Extended) is separate from Googlebot
+		"Google-Extended",
+		// Anthropic
+		"ClaudeBot", "Claude-Web", "anthropic-ai",
+		// Perplexity, Meta, Amazon, Apple, Brave, You.com
+		"PerplexityBot", "meta-externalagent", "meta-externalFetcher",
+		"Amazonbot", "Applebot-Extended", "FriendlyCrawler", "YouBot",
+		// Common Crawl & research corpora
+		"CCBot", "ai2bot", "omgili", "SeekrBot", "Diffbot", "ImagesiftBot",
+		// Chinese AI crawlers
+		"Bytespider", "cohere-ai", "Timpibot",
+	}
+	var b strings.Builder
+	b.WriteString("User-agent: *\nAllow: /\nDisallow: /admin\n\n")
+	b.WriteString("# AI assistants, AI search engines and training crawlers are welcome.\n")
+	for _, ua := range aiCrawlers {
+		b.WriteString("User-agent: " + ua + "\n")
+	}
+	b.WriteString("Allow: /\n\n")
+	b.WriteString("Sitemap: " + URL("/sitemap.xml") + "\n")
+	return b.String()
 }
 
 // LLMSTXT renders llms.txt following the llmstxt.org convention so AI

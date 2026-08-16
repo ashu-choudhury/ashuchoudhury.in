@@ -14,6 +14,7 @@ import (
 	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/data"
 	"github.com/ashu-choudhury/portfolio/importer"
+	"github.com/ashu-choudhury/portfolio/indexnow"
 	"github.com/ashu-choudhury/portfolio/store"
 )
 
@@ -196,13 +197,13 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	setEdgeCache(w)
 	_, _ = w.Write([]byte(data.SitemapXML(paths...)))
 }
 
 func (s *Server) handleRobots(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	setEdgeCache(w)
 	_, _ = w.Write([]byte(data.RobotsTXT()))
 }
 
@@ -210,6 +211,28 @@ func (s *Server) handleRobots(w http.ResponseWriter, _ *http.Request) {
 // pages plus every shown project and published blog post, mirroring the
 // sitemap. The shorter cache lifetime keeps new projects/posts visible to
 // AI agents promptly.
+// handleIndexNowKey serves the IndexNow ownership file at /<key>.txt.
+func (s *Server) handleIndexNowKey(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	setEdgeCache(w)
+	_, _ = w.Write([]byte(s.indexNowKey))
+}
+
+// NotifySearchEngines pings IndexNow (Bing, Yandex, Seznam, Naver) with
+// the sitemap so changed content is recrawled within minutes. Best-effort
+// and non-blocking; a no-op unless INDEXNOW_KEY is set. Called at startup
+// and after every content change (admin saves/deletes, GitHub sync).
+func (s *Server) NotifySearchEngines() {
+	if s.indexNowKey == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := indexnow.SubmitSitemap(ctx, s.indexNowKey, data.URL("/sitemap.xml")); err != nil {
+		log.Printf("indexnow: %v", err)
+	}
+}
+
 func (s *Server) handleLLMSTXT(w http.ResponseWriter, r *http.Request) {
 	var projects []store.Project
 	if ps, err := s.Store.ListShownProjects(r.Context()); err == nil {
@@ -220,7 +243,7 @@ func (s *Server) handleLLMSTXT(w http.ResponseWriter, r *http.Request) {
 		posts = ps
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	setEdgeCache(w)
 	_, _ = w.Write([]byte(data.LLMSTXT(projects, posts)))
 }
 
