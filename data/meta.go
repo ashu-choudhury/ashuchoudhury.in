@@ -46,7 +46,7 @@ func jsonLD(v any) string {
 func HomeMeta(theme string) PageMeta {
 	return PageMeta{
 		Title:       SiteName + " — " + SiteRole,
-		Description: SiteTag + " Android and full-stack developer building apps, Go and Rust systems, Kotlin libraries and AI-powered tooling. Explore my projects on GitHub.",
+		Description: "Android & Full-Stack Developer building apps, systems and AI tooling — from the binary up to the API. Explore open-source projects on GitHub.",
 		Canonical:   URL("/"),
 		Image:       "/static/og.svg",
 		Type:        "website",
@@ -78,7 +78,7 @@ func HomeMeta(theme string) PageMeta {
 func AboutMeta(theme string) PageMeta {
 	return PageMeta{
 		Title:       "About — " + SiteName,
-		Description: "Learn about " + SiteName + ", an " + SiteRole + " who works from Android apps down to Go and Rust systems — turning complex problems into elegant software.",
+		Description: "Learn about " + SiteName + ", a self-taught " + SiteRole + " — Android apps, Go and Rust systems, Kotlin libraries and AI tooling.",
 		Canonical:   URL("/about"),
 		Image:       "/static/og.svg",
 		Type:        "profile",
@@ -126,7 +126,7 @@ func ContactMeta(theme string) PageMeta {
 func ProjectsMeta(theme string, count int) PageMeta {
 	return PageMeta{
 		Title:       "Projects — " + SiteName,
-		Description: "A selection of projects by " + SiteName + ": Android apps, Go and Rust systems, Kotlin libraries and AI tooling — open source and available on GitHub, npm, pub.dev and JitPack.",
+		Description: "Open-source projects by " + SiteName + " — Android apps, Go and Rust systems, Kotlin libraries and AI tooling, on GitHub, npm and pub.dev.",
 		Canonical:   URL("/projects"),
 		Image:       "/static/og.svg",
 		Type:        "website",
@@ -151,7 +151,7 @@ func ProjectsMeta(theme string, count int) PageMeta {
 func ProjectMeta(p *store.Project, theme string) PageMeta {
 	return PageMeta{
 		Title:       p.Name + " — " + SiteName,
-		Description: p.Tagline + ". " + truncate(p.Summary, 150),
+		Description: truncate(p.Tagline+". "+p.Summary, 158),
 		Canonical:   URL("/projects/" + p.Slug),
 		Image:       "/static/og.svg",
 		Type:        "article",
@@ -185,6 +185,18 @@ func BlogIndexMeta(theme string) PageMeta {
 		Type:        "website",
 		Active:      "blog",
 		Theme:       theme,
+		JSONLD: jsonLD(map[string]any{
+			"@context":   "https://schema.org",
+			"@type":      "Blog",
+			"name":       SiteName + " — Blog",
+			"url":        URL("/blog"),
+			"inLanguage": "en",
+			"author": map[string]any{
+				"@type": "Person",
+				"name":  SiteName,
+				"url":   URL("/about"),
+			},
+		}),
 	}
 }
 
@@ -241,13 +253,14 @@ func truncate(s string, n int) string {
 	return string(r[:n]) + "…"
 }
 
-// firstLineOf returns the first non-empty line of s, truncated.
+// firstLineOf returns the first non-empty line of s, truncated to fit a
+// 160-char meta description (truncate adds the ellipsis).
 func firstLineOf(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	return truncate(strings.TrimSpace(s), 160)
+	return truncate(strings.TrimSpace(s), 158)
 }
 
 // SitemapXML renders the sitemap for the canonical pages plus the dynamic
@@ -271,7 +284,24 @@ func SitemapXML(paths ...string) string {
 	return b.String()
 }
 
-// RobotsTXT renders robots.txt pointing at the sitemap.
+// RobotsTXT renders robots.txt: allow the whole public site, explicitly
+// block the admin panel, and point crawlers at the sitemap.
 func RobotsTXT() string {
-	return "User-agent: *\nAllow: /\n\nSitemap: " + URL("/sitemap.xml") + "\n"
+	return "User-agent: *\nAllow: /\nDisallow: /admin\n\nSitemap: " + URL("/sitemap.xml") + "\n"
+}
+
+// LLMSTXT renders llms.txt following the llmstxt.org convention so AI
+// agents (and the Lighthouse agentic-browsing checks) can discover the
+// site's public pages.
+func LLMSTXT() string {
+	var b strings.Builder
+	b.WriteString("# " + SiteName + "\n\n")
+	b.WriteString("> " + SiteTag + "\n\n")
+	b.WriteString("Personal website of " + SiteName + ", an " + SiteRole + ".\n\n")
+	b.WriteString("## Pages\n\n")
+	b.WriteString("- [About](" + URL("/about") + "): biography, experience and skills\n")
+	b.WriteString("- [Projects](" + URL("/projects") + "): open-source projects, apps and libraries\n")
+	b.WriteString("- [Blog](" + URL("/blog") + "): articles and engineering notes\n")
+	b.WriteString("- [Contact](" + URL("/contact") + "): get in touch\n")
+	return b.String()
 }

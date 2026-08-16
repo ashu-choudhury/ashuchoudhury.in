@@ -132,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	// SEO & Diagnostics
 	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /robots.txt", s.handleRobots)
+	mux.HandleFunc("GET /llms.txt", s.handleLLMSTXT)
 	mux.HandleFunc("GET /health", s.handleHealth)
 
 	// Admin
@@ -180,7 +181,7 @@ func (s *Server) Handler() http.Handler {
 	// Middleware chain: logging -> security headers -> analytics -> CSRF.
 	// Admin routes additionally get an auth guard (wired per-route above
 	// via adminOnly).
-	return s.securityHeaders(s.logRequests(s.analytics(s.csrfGuard(mux))))
+	return s.securityHeaders(s.logRequests(s.analytics(s.csrfGuard(redirectTrailingSlash(mux)))))
 }
 
 // initAdmin configures the single admin account from the environment.

@@ -52,6 +52,7 @@ import (
 
 	"github.com/ashu-choudhury/portfolio/data"
 	"github.com/ashu-choudhury/portfolio/handlers"
+	"github.com/ashu-choudhury/portfolio/importer"
 	"github.com/ashu-choudhury/portfolio/storage"
 	"github.com/ashu-choudhury/portfolio/store"
 )
@@ -99,6 +100,13 @@ func main() {
 	} else {
 		db = sqliteStore
 		defer sqliteStore.Close()
+	}
+
+	// Collapse legacy duplicate project slugs (case/underscore variants)
+	// so every project keeps exactly one canonical URL. Runs before
+	// seeding; idempotent and cheap.
+	if err := importer.Dedupe(context.Background(), db); err != nil {
+		log.Printf("[DATABASE DIAGNOSTIC WARNING] project dedupe failed: %v", err)
 	}
 
 	// Seed the curated catalogue asynchronously (non-blocking for fast server cold-starts).

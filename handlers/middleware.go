@@ -55,6 +55,22 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
+// redirectTrailingSlash 301s /path/ to /path (except the root), preserving
+// the query string. Every page has exactly one URL, so crawlers never see
+// duplicate trailing-slash variants.
+func redirectTrailingSlash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p != "/" && strings.HasSuffix(p, "/") {
+			u := *r.URL
+			u.Path = strings.TrimSuffix(p, "/")
+			http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Analytics
 
@@ -93,7 +109,7 @@ func (s *Server) countView(r *http.Request) bool {
 	if strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/admin") {
 		return false
 	}
-	if p == "/sitemap.xml" || p == "/robots.txt" || p == "/favicon.ico" {
+	if p == "/sitemap.xml" || p == "/robots.txt" || p == "/llms.txt" || p == "/favicon.ico" {
 		return false
 	}
 	ua := strings.ToLower(r.UserAgent())

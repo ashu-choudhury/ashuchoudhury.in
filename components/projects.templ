@@ -12,7 +12,7 @@ templ ProjectCard(p store.Project) {
 		</a>
 		<div class="card-body">
 			<div>
-				<h3><a href={ "/projects/" + p.Slug }>{ p.Name }</a></h3>
+				<h2><a href={ "/projects/" + p.Slug }>{ p.Name }</a></h2>
 				<p class="tagline">{ p.Tagline }</p>
 			</div>
 			<div class="chips">
@@ -22,7 +22,7 @@ templ ProjectCard(p store.Project) {
 			</div>
 			<div class="card-foot">
 				<a class="read-more" href={ "/projects/" + p.Slug }>
-					Read more
+					Read more<span class="sr-only"> about { p.Name }</span>
 					@Icon("arrow-right", 15)
 				</a>
 				if p.RepoURL != "" {

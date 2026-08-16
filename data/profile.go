@@ -22,6 +22,10 @@ func Age() int {
 // Site identity. The canonical URL is overridable at deploy time via the
 // SITE_URL environment variable; the name and tagline can be edited from
 // the admin panel (Settings) and take effect immediately.
+//
+// The bare domain is canonical — www (if used at all) is expected to
+// redirect to it at the hosting layer, so canonicals, sitemap, RSS and
+// og:url all point at https://ashuchoudhury.in.
 const (
 	SiteRole   = "Android & Full-Stack Developer"
 	SiteDomain = "ashuchoudhury.in"

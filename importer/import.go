@@ -19,6 +19,82 @@ type SyncOptions struct {
 	Readmes bool
 }
 
+// Dedupe merges legacy duplicate projects whose slugs differ only by case
+// or underscore normalization (e.g. "ClipSync" vs "clipsync", or
+// "jiosaavn_dart" vs "jiosaavn-dart") into a single canonical
+// lowercase-hyphen entry. Admin overrides from the removed entry are
+// preserved. Idempotent; safe to run on every start and before each sync.
+func Dedupe(ctx context.Context, s store.Store) error {
+	projects, err := s.ListProjects(ctx)
+	if err != nil {
+		return err
+	}
+	seen := map[string]*store.Project{} // normalized slug -> kept project
+	for i := range projects {
+		p := &projects[i]
+		key := normalizeSlug(p.Slug)
+		keep, ok := seen[key]
+		if !ok {
+			seen[key] = p
+			continue
+		}
+		// The canonical (lowercase, hyphen-separated) slug wins the URL;
+		// merge the other entry's content and overrides into it.
+		if p.Slug == key && keep.Slug != key {
+			keep, p = p, keep
+			seen[key] = keep
+		}
+		mergeProject(keep, p)
+		// ListProjects returns copies, so persist the merged result before
+		// dropping the duplicate entry.
+		if err := s.UpsertProject(ctx, *keep); err != nil {
+			return err
+		}
+		if err := s.DeleteProject(ctx, p.Slug); err != nil {
+			return err
+		}
+		log.Printf("importer: merged duplicate project %q into %q", p.Slug, keep.Slug)
+	}
+	return nil
+}
+
+// mergeProject copies content and admin overrides from dup into keep,
+// never overwriting what keep already has. Visibility/featured are unions.
+func mergeProject(keep, dup *store.Project) {
+	keep.Visible = keep.Visible || dup.Visible
+	keep.Featured = keep.Featured || dup.Featured
+	if keep.Classification == store.ClassificationClone && dup.Classification != store.ClassificationClone {
+		keep.Classification = dup.Classification
+	}
+	if keep.Summary == "" {
+		keep.Summary = dup.Summary
+	}
+	if keep.Tagline == "" {
+		keep.Tagline = dup.Tagline
+	}
+	if len(keep.Features) == 0 {
+		keep.Features = dup.Features
+	}
+	if len(keep.Stack) == 0 {
+		keep.Stack = dup.Stack
+	}
+	if keep.Description == "" {
+		keep.Description = dup.Description
+	}
+	if keep.Accent == "" {
+		keep.Accent = dup.Accent
+	}
+	if keep.Mono == "" {
+		keep.Mono = dup.Mono
+	}
+	if keep.Year == "" {
+		keep.Year = dup.Year
+	}
+	if len(keep.Links) == 0 {
+		keep.Links = dup.Links
+	}
+}
+
 // Sync pulls every repository for the owner, classifies it, infers a
 // fingerprint, and upserts it into the store. Existing admin overrides
 // (visible/featured/classification) are preserved by the store's upsert.
@@ -26,6 +102,12 @@ type SyncOptions struct {
 // Repos the owner does not own are imported as hidden clones so the admin
 // panel can review and override them.
 func Sync(ctx context.Context, s store.Store, opts SyncOptions) error {
+	// Collapse any legacy duplicate slugs before re-importing so each repo
+	// keeps exactly one canonical URL.
+	if err := Dedupe(ctx, s); err != nil {
+		log.Printf("importer: dedupe: %v", err)
+	}
+
 	owner := opts.Owner
 	if owner == "" {
 		owner = defaultOwner

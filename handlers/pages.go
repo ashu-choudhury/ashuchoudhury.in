@@ -180,6 +180,9 @@ func (s *Server) handleThemeToggle(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 // SEO endpoints
 
+// handleSitemap renders the sitemap from the live store: the canonical
+// pages plus every shown project and published blog post. Admin pages are
+// never included.
 func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	var paths []string
 	if ps, err := s.Store.ListShownProjects(r.Context()); err == nil {
@@ -193,12 +196,20 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_, _ = w.Write([]byte(data.SitemapXML(paths...)))
 }
 
 func (s *Server) handleRobots(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write([]byte(data.RobotsTXT()))
+}
+
+func (s *Server) handleLLMSTXT(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write([]byte(data.LLMSTXT()))
 }
 
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {

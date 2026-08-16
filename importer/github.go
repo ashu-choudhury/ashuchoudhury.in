@@ -193,10 +193,18 @@ func decodeBase64(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
+// normalizeSlug derives a canonical URL slug from a GitHub repo name:
+// lowercase and underscore-free. GitHub treats repo names as
+// case-insensitive, so ClipSync and clipsync (or jiosaavn_dart and
+// jiosaavn-dart) are the same project and must share one URL.
+func normalizeSlug(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, "_", "-"))
+}
+
 // toProject converts a GitHub repo into a store.Project with defaults.
 func (c *Client) toProject(r Repo) store.Project {
 	return store.Project{
-		Slug:           r.Name,
+		Slug:           normalizeSlug(r.Name),
 		Name:           prettyName(r.Name),
 		Tagline:        firstLine(r.Description),
 		Summary:        r.Description,
