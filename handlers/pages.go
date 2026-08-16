@@ -206,10 +206,22 @@ func (s *Server) handleRobots(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(data.RobotsTXT()))
 }
 
-func (s *Server) handleLLMSTXT(w http.ResponseWriter, _ *http.Request) {
+// handleLLMSTXT renders llms.txt from the live store — the canonical
+// pages plus every shown project and published blog post, mirroring the
+// sitemap. The shorter cache lifetime keeps new projects/posts visible to
+// AI agents promptly.
+func (s *Server) handleLLMSTXT(w http.ResponseWriter, r *http.Request) {
+	var projects []store.Project
+	if ps, err := s.Store.ListShownProjects(r.Context()); err == nil {
+		projects = ps
+	}
+	var posts []store.Post
+	if ps, err := s.Store.ListPosts(r.Context(), false); err == nil {
+		posts = ps
+	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	_, _ = w.Write([]byte(data.LLMSTXT()))
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write([]byte(data.LLMSTXT(projects, posts)))
 }
 
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {

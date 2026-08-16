@@ -39,7 +39,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"errors"
 	"io/fs"
 	"log"
@@ -50,6 +52,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/data"
 	"github.com/ashu-choudhury/portfolio/handlers"
 	"github.com/ashu-choudhury/portfolio/importer"
@@ -123,6 +126,18 @@ func main() {
 	staticSub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		log.Fatalf("static embed: %v", err)
+	}
+
+	// Inline the stylesheet into every page's <head> so first paint needs
+	// no render-blocking CSS request. The strict CSP allowlists it via its
+	// sha256 hash.
+	if css, err := fs.ReadFile(staticFS, "static/css/style.css"); err == nil {
+		components.SetStyleCSS(string(css))
+		sum := sha256.Sum256(css)
+		// Hash sources must be single-quoted in the CSP, like nonces.
+		handlers.SetStyleCSPHash("'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'")
+	} else {
+		log.Printf("inline css: %v", err)
 	}
 
 	// ------------------------------------------------------------------

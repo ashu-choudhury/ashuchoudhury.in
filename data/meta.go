@@ -292,8 +292,9 @@ func RobotsTXT() string {
 
 // LLMSTXT renders llms.txt following the llmstxt.org convention so AI
 // agents (and the Lighthouse agentic-browsing checks) can discover the
-// site's public pages.
-func LLMSTXT() string {
+// site: the canonical pages plus every shown project and published blog
+// post passed in from the store.
+func LLMSTXT(projects []store.Project, posts []store.Post) string {
 	var b strings.Builder
 	b.WriteString("# " + SiteName + "\n\n")
 	b.WriteString("> " + SiteTag + "\n\n")
@@ -303,5 +304,27 @@ func LLMSTXT() string {
 	b.WriteString("- [Projects](" + URL("/projects") + "): open-source projects, apps and libraries\n")
 	b.WriteString("- [Blog](" + URL("/blog") + "): articles and engineering notes\n")
 	b.WriteString("- [Contact](" + URL("/contact") + "): get in touch\n")
+
+	if len(projects) > 0 {
+		b.WriteString("\n## Projects\n\n")
+		for _, p := range projects {
+			b.WriteString(llmsLink(p.Name, URL("/projects/"+p.Slug), firstLineOf(p.Tagline)))
+		}
+	}
+	if len(posts) > 0 {
+		b.WriteString("\n## Blog posts\n\n")
+		for _, p := range posts {
+			b.WriteString(llmsLink(p.Title, URL("/blog/"+p.Slug), firstLineOf(p.Summary)))
+		}
+	}
 	return b.String()
+}
+
+// llmsLink renders one "- [label](url): description" bullet, omitting the
+// description when there is none.
+func llmsLink(label, url, desc string) string {
+	if desc == "" {
+		return "- [" + label + "](" + url + ")\n"
+	}
+	return "- [" + label + "](" + url + "): " + desc + "\n"
 }

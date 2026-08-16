@@ -76,12 +76,17 @@ func (s *Server) applySettings() {
 	data.SetSiteIdentity(title, desc)
 }
 
-// staticHandler serves embedded static assets with long-lived caching.
+// staticHandler serves embedded static assets with a day-long cache so
+// repeat visitors skip re-downloading CSS/JS.
 func (s *Server) staticHandler() http.Handler {
 	if s.staticFS == nil {
 		return http.NotFoundHandler()
 	}
-	return http.StripPrefix("/static/", http.FileServerFS(s.staticFS))
+	fs := http.FileServerFS(s.staticFS)
+	return http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fs.ServeHTTP(w, r)
+	}))
 }
 
 // filesHandler serves public assets directly from S3 as a zero-disk S3 proxy.

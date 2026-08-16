@@ -38,8 +38,7 @@ templ Head(page data.PageMeta) {
 	if page.JSONLD != "" {
 		@templ.Raw(ldScript(page.JSONLD))
 	}
-	<link rel="stylesheet" href="/static/css/style.css"/>
-	<link rel="preload" href="/static/htmx.min.js" as="script"/>
+	@templ.Raw(styleHead())
 	<script src="/static/htmx.min.js" defer></script>
 	<script src="/static/htmx-config.js" defer></script>
 }

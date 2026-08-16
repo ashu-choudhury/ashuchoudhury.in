@@ -112,13 +112,44 @@ func TestLLMSTXT(t *testing.T) {
 		"https://ashuchoudhury.in/projects",
 		"https://ashuchoudhury.in/blog",
 		"https://ashuchoudhury.in/contact",
+		// Dynamic entries from the store, like the sitemap.
+		"## Projects",
+		"[Demo Project](https://ashuchoudhury.in/projects/demo-project)",
+		"## Blog posts",
+		"[Demo Post](https://ashuchoudhury.in/blog/demo-post)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("llms.txt missing %q; got:\n%s", want, body)
 		}
 	}
+	if strings.Contains(body, "hidden-project") || strings.Contains(body, "Hidden Project") {
+		t.Error("llms.txt must not list hidden projects")
+	}
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
 		t.Errorf("llms.txt content-type = %q, want text/markdown", ct)
+	}
+}
+
+func TestCSPAllowlistsInlinedStyle(t *testing.T) {
+	srv := New(seedSEOStore(t), nil)
+	handler := srv.Handler()
+
+	// Without the hash installed, only external stylesheets are allowed.
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "style-src 'self'") {
+		t.Errorf("CSP missing base style-src: %q", csp)
+	}
+
+	// Once main.go installs the hash of the inlined stylesheet, the CSP
+	// must allowlist it.
+	SetStyleCSPHash("'sha256-abcdef'")
+	defer SetStyleCSPHash("")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/", nil))
+	csp := rec2.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "style-src 'self' 'sha256-abcdef'") {
+		t.Errorf("CSP missing quoted inlined-style hash: %q", csp)
 	}
 }
 

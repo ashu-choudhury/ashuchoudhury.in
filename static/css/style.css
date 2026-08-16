@@ -786,10 +786,11 @@ section { padding-block: 4.5rem; }
 .rss-link:hover { color: var(--accent-3); border-color: var(--accent-3); }
 
 /* ---------- Animations ---------- */
-.reveal { animation: rise 0.6s ease both; }
-.reveal-1 { animation-delay: 0.05s; }
-.reveal-2 { animation-delay: 0.12s; }
-.reveal-3 { animation-delay: 0.2s; }
+/* Kept short so hero content is visually complete quickly (Speed Index). */
+.reveal { animation: rise 0.35s ease both; }
+.reveal-1 { animation-delay: 0.03s; }
+.reveal-2 { animation-delay: 0.07s; }
+.reveal-3 { animation-delay: 0.12s; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Responsive ---------- */

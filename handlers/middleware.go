@@ -21,15 +21,28 @@ const csrfCookieName = "csrf_token"
 // ---------------------------------------------------------------------------
 // Security headers
 
+// styleCSPHash is the sha256 hash of the inlined stylesheet, allowlisting
+// the <style> block under the strict CSP (style-src 'self'). Empty until
+// main.go installs it, in which case only external stylesheets are allowed.
+var styleCSPHash string
+
+// SetStyleCSPHash records the hash of the inlined stylesheet so the CSP can
+// allowlist it.
+func SetStyleCSPHash(h string) { styleCSPHash = h }
+
 // securityHeaders applies sensible security headers, including a strict CSP
 // that works with htmx (self-hosted script) and server-rendered HTML.
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		styleSrc := "style-src 'self'"
+		if styleCSPHash != "" {
+			styleSrc += " " + styleCSPHash
+		}
 		h.Set("Content-Security-Policy", strings.Join([]string{
 			"default-src 'self'",
 			"script-src 'self'",
-			"style-src 'self'",
+			styleSrc,
 			"img-src 'self' data:",
 			"font-src 'self'",
 			"connect-src 'self'",
