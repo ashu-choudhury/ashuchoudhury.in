@@ -14,8 +14,43 @@ This is the source code for my personal website and portfolio. It is designed to
 - 🚀 **Fast & Lightweight**: Server-rendered HTML with HTMX over the wire.
 - 🎨 **Clean Aesthetics**: Modern typography, responsive design system, dark and light theme toggle.
 - 📝 **Blog**: Built-in Markdown articles with full-text search and RSS feed.
+- ✨ **AI blog generator**: Two-session pipeline — an AI strategist reviews the published blog history and picks the best next topic, then a brand-new AI session writes the full post. Generate from the admin panel or automatically via a cron ping.
 - 💻 **Projects**: Live Showcase of open-source projects with dynamic README rendering.
 - 🛠️ **Admin Panel**: Lightweight content management system to publish posts, manage projects, and manage public files.
+
+---
+
+## 🤖 Automatic AI blog generation
+
+The site ships a fully automatic blog pipeline that runs on a cron ping:
+
+```bash
+curl -X POST "https://your-site/api/ai/generate?token=YOUR_TOKEN"
+```
+
+When that endpoint is hit it runs two **separate, isolated LLM sessions**:
+
+1. **Strategist** — sees the published blog history (titles, tags, summaries)
+   and picks the single best next topic (title, angle, tags). The session ends.
+2. **Writer** — starts a brand-new chat that only receives the chosen topic
+   (never the strategist's conversation or your blog history) and writes the
+   complete, detailed Markdown post.
+
+The post is then **published automatically** (slug deduplicated, RSS + search
+engines notified). The endpoint returns `202` immediately and the pipeline
+runs in the background; poll `GET /api/ai/generate/status?job_id=…` for
+progress, or add `&wait=true` to run synchronously.
+
+Set the token via the `AI_GENERATE_TOKEN` environment variable or Admin →
+Settings → “Auto-generate ping token”, and the model/API key via
+`OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` (or Admin → Settings).
+Then point a scheduler (cron-job.org, GitHub Actions, a cron job on your
+server) at the URL above — e.g. once a week.
+
+From the admin panel you can also generate a post manually with or without a
+topic: leave the topic empty and the strategist picks the next one from your
+blog history. Generated drafts are loaded into the editor for review before
+saving (only the ping endpoint publishes automatically).
 
 ---
 

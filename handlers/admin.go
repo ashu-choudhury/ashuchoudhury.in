@@ -114,6 +114,8 @@ func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	aiRuns, _ := s.Store.ListAIGenJobs(ctx, 8)
+
 	d := components.DashboardData{
 		TotalViews:   total,
 		TodayViews:   today,
@@ -122,6 +124,7 @@ func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		PostCount:    len(posts),
 		MessageCount: len(messages),
 		ProjectCount: len(projects),
+		AIGenJobs:    aiRuns,
 	}
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Dashboard", Active: "dashboard"},
 		components.AdminDashboard(d))
@@ -146,27 +149,26 @@ func (s *Server) handleAdminPostNew(w http.ResponseWriter, r *http.Request) {
 	cfg := s.DefaultAIConfig(ctx)
 
 	if r.Method == http.MethodGet {
-		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(nil, true, "", "", models, cfg.Model, ""))
+		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"}, components.AdminPostForm(nil, true, "", "", models, cfg.Model, "", nil))
 		return
 	}
 	// POST create
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, errMsg, renderMarkdown(p.Body), models, cfg.Model, ""))
+			components.AdminPostForm(p, true, errMsg, renderMarkdown(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	if _, err := s.Store.GetPost(r.Context(), p.Slug); err == nil {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdown(p.Body), models, cfg.Model, ""))
+			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	id, err := s.Store.CreatePost(r.Context(), *p)
 	if err != nil {
 		log.Printf("admin: create post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdown(p.Body), models, cfg.Model, ""))
+			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	http.Redirect(w, r, "/admin/posts/"+itoa64(id)+"/edit", http.StatusSeeOther)
@@ -188,7 +190,7 @@ func (s *Server) handleAdminPostEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-		components.AdminPostForm(p, false, "", renderMarkdown(p.Body), models, cfg.Model, ""))
+		components.AdminPostForm(p, false, "", renderMarkdown(p.Body), models, cfg.Model, "", nil))
 }
 
 func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
@@ -199,13 +201,13 @@ func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, errMsg, renderMarkdown(p.Body), models, cfg.Model, ""))
+			components.AdminPostForm(p, false, errMsg, renderMarkdown(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	if err := s.Store.UpdatePost(ctx, *p); err != nil {
 		log.Printf("admin: update post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body), models, cfg.Model, ""))
+			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	s.TriggerBackup(ctx)
@@ -213,16 +215,16 @@ func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/posts", http.StatusSeeOther)
 }
 
-func (s *Server) handleAdminPostGenerateAI(w http.ResponseWriter, r *http.Request) {
+// handleAdminAIGenerate starts the two-session AI pipeline as a background
+// job and re-renders the post form with a live progress card. The form keeps
+// whatever the admin already typed; the job card polls its own status and
+// offers to load the finished draft into the editor.
+func (s *Server) handleAdminAIGenerate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	models := s.ConfiguredAIModels(ctx)
-	cfg := s.DefaultAIConfig(ctx)
 
 	topic := strings.TrimSpace(r.FormValue("topic"))
 	selectedModel := strings.TrimSpace(r.FormValue("model"))
-	if selectedModel != "" {
-		cfg.Model = selectedModel
-	}
 
 	p, _ := s.parsePostForm(r)
 	if p == nil {
@@ -230,22 +232,66 @@ func (s *Server) handleAdminPostGenerateAI(w http.ResponseWriter, r *http.Reques
 	}
 	isNew := p.ID == 0
 
-	res, err := GenerateAIBlogPost(ctx, cfg, topic)
+	jobID, err := s.startAIGenJob(ctx, topic, selectedModel, false)
 	if err != nil {
 		log.Printf("admin generate ai: %v", err)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		components.AdminPostForm(p, isNew, "AI Generation failed: "+err.Error(), renderMarkdown(p.Body), models, cfg.Model, topic).Render(ctx, w)
+		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
+			components.AdminPostForm(p, isNew, "AI Generation failed: "+err.Error(), renderMarkdown(p.Body), models, selectedModel, topic, nil))
 		return
 	}
 
-	p.Title = res.Title
-	p.Slug = res.Slug
-	p.Summary = res.Summary
-	p.Tags = res.Tags
-	p.Body = res.Body
+	card := &components.AIGenCard{JobID: jobID, Status: aiStatusQueued, Stage: "Preparing…"}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	components.AdminPostForm(p, isNew, "", renderMarkdown(p.Body), models, selectedModel, topic, card).Render(ctx, w)
+}
+
+// handleAdminAIStatus renders the live progress card for a generation job.
+// The card polls itself every 2s; when the job finishes it stops polling and
+// shows the result (or the error).
+func (s *Server) handleAdminAIStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	job := s.aiJobs.get(r.URL.Query().Get("job_id"))
+	if job == nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		components.AIGenStatus(components.AIGenCard{Status: aiStatusFailed, Err: "Job not found — it may have expired. Try generating again."}).Render(ctx, w)
+		return
+	}
+	card := &components.AIGenCard{JobID: job.ID, Status: job.Status, Stage: job.Stage, Err: job.Err}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	components.AIGenStatus(*card).Render(ctx, w)
+}
+
+// handleAdminAILoad loads a finished generation job's result into the post
+// editor as a draft ready to review and save.
+func (s *Server) handleAdminAILoad(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	job := s.aiJobs.get(r.URL.Query().Get("job_id"))
+	if job == nil || job.Result == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	models := s.ConfiguredAIModels(ctx)
+	model := job.Model
+	if model == "" {
+		model = s.DefaultAIConfig(ctx).Model
+	}
+
+	p := &store.Post{
+		Title:     job.Result.Title,
+		Slug:      job.Result.Slug,
+		Summary:   job.Result.Summary,
+		Tags:      job.Result.Tags,
+		Body:      job.Result.Body,
+		Published: true, // pre-checked so saving publishes the generated post
+	}
+	topic := job.TopicHint
+	if topic == "" {
+		topic = job.Result.Title
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.AdminPostForm(p, isNew, "", renderMarkdown(p.Body), models, cfg.Model, topic).Render(ctx, w)
+	components.AdminPostForm(p, true, "", renderMarkdown(p.Body), models, model, topic, nil).Render(ctx, w)
 }
 
 func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
@@ -617,9 +663,10 @@ func (s *Server) handleAdminSettingsPage(w http.ResponseWriter, r *http.Request)
 
 	aiCfg := s.DefaultAIConfig(ctx)
 	aiModelsStr := strings.Join(s.ConfiguredAIModels(ctx), ", ")
+	aiToken := s.AIGenerateToken(ctx)
 
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Settings", Active: "settings"},
-		components.AdminSettingsForm(title, desc, aiCfg.BaseURL, aiCfg.APIKey, aiModelsStr, aiCfg.Model, r.URL.Query().Get("saved") == "1"))
+		components.AdminSettingsForm(title, desc, aiCfg.BaseURL, aiCfg.APIKey, aiModelsStr, aiCfg.Model, aiToken, r.URL.Query().Get("saved") == "1"))
 }
 
 func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request) {
@@ -630,6 +677,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	aiAPIKey := strings.TrimSpace(r.FormValue("ai_api_key"))
 	aiModels := strings.TrimSpace(r.FormValue("ai_models"))
 	aiDefaultModel := strings.TrimSpace(r.FormValue("ai_default_model"))
+	aiGenerateToken := strings.TrimSpace(r.FormValue("ai_generate_token"))
 
 	_ = s.Store.SetSetting(ctx, settingsTitle, title)
 	_ = s.Store.SetSetting(ctx, settingsDesc, desc)
@@ -637,6 +685,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	_ = s.Store.SetSetting(ctx, "ai_api_key", aiAPIKey)
 	_ = s.Store.SetSetting(ctx, "ai_models", aiModels)
 	_ = s.Store.SetSetting(ctx, "ai_default_model", aiDefaultModel)
+	_ = s.Store.SetSetting(ctx, "ai_generate_token", aiGenerateToken)
 
 	data.SetSiteIdentity(title, desc)
 	s.TriggerBackup(ctx)
@@ -793,4 +842,3 @@ func fmtSizeBytes(b int64) string {
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
-

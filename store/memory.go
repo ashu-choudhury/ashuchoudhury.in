@@ -22,6 +22,7 @@ type Memory struct {
 	views    map[string]int64 // "date|path" -> count
 	sessions map[string]Session
 	settings map[string]string
+	aiJobs   map[string]AIGenJob
 }
 
 // NewMemory returns an empty in-memory store.
@@ -33,6 +34,7 @@ func NewMemory() *Memory {
 		views:    map[string]int64{},
 		sessions: map[string]Session{},
 		settings: map[string]string{},
+		aiJobs:   map[string]AIGenJob{},
 	}
 }
 
@@ -374,6 +376,53 @@ func (m *Memory) DeleteSession(ctx context.Context, token string) error {
 	defer m.mu.Unlock()
 	delete(m.sessions, token)
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// AI generation jobs
+
+// UpsertAIGenJob implements Store.
+func (m *Memory) UpsertAIGenJob(ctx context.Context, j AIGenJob) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.aiJobs[j.ID] = j
+	return nil
+}
+
+// ListAIGenJobs implements Store (newest first).
+func (m *Memory) ListAIGenJobs(ctx context.Context, limit int) ([]AIGenJob, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]AIGenJob, 0, len(m.aiJobs))
+	for _, j := range m.aiJobs {
+		out = append(out, j)
+	}
+	sort.Slice(out, func(i, k int) bool { return out[i].CreatedAt.After(out[k].CreatedAt) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// FailStaleAIGenJobs implements Store.
+func (m *Memory) FailStaleAIGenJobs(ctx context.Context, cutoff time.Time, note string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for id, j := range m.aiJobs {
+		switch j.Status {
+		case "queued", "planning", "writing", "publishing":
+			if j.CreatedAt.Before(cutoff) {
+				j.Status = "failed"
+				j.Stage = "Interrupted"
+				j.Error = note
+				j.FinishedAt = time.Now().UTC()
+				m.aiJobs[id] = j
+				n++
+			}
+		}
+	}
+	return n, nil
 }
 
 // ---------------------------------------------------------------------------

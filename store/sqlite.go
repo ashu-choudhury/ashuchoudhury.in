@@ -88,6 +88,24 @@ CREATE TABLE IF NOT EXISTS settings (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ai_generation_jobs (
+	id          TEXT PRIMARY KEY,
+	status      TEXT NOT NULL DEFAULT 'queued',
+	stage       TEXT NOT NULL DEFAULT '',
+	model       TEXT NOT NULL DEFAULT '',
+	topic_hint  TEXT NOT NULL DEFAULT '',
+	publish     INTEGER NOT NULL DEFAULT 0,
+	error       TEXT NOT NULL DEFAULT '',
+	title       TEXT NOT NULL DEFAULT '',
+	slug        TEXT NOT NULL DEFAULT '',
+	summary     TEXT NOT NULL DEFAULT '',
+	tags        TEXT NOT NULL DEFAULT '[]',
+	post_id     INTEGER NOT NULL DEFAULT 0,
+	created_at  TEXT NOT NULL,
+	finished_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_ai_generation_jobs_created ON ai_generation_jobs(created_at);
 `
 
 // SQLite implements Store backed by a SQLite database.
@@ -661,6 +679,93 @@ func (s *SQLite) SessionValid(ctx context.Context, token string) (bool, error) {
 func (s *SQLite) DeleteSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM sessions WHERE token = ?", token)
 	return err
+}
+
+// ---------------------------------------------------------------------------
+// AI generation jobs
+
+const aiGenJobCols = "id, status, stage, model, topic_hint, publish, error, title, slug, summary, tags, post_id, created_at, finished_at"
+
+func aiGenJobFromRow(row interface{ Scan(...any) error }) (*AIGenJob, error) {
+	var (
+		j            AIGenJob
+		tags         string
+		publish      int
+		created, fin string
+	)
+	if err := row.Scan(&j.ID, &j.Status, &j.Stage, &j.Model, &j.TopicHint,
+		&publish, &j.Error, &j.Title, &j.Slug, &j.Summary, &tags,
+		&j.PostID, &created, &fin); err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(tags), &j.Tags)
+	j.Publish = publish != 0
+	j.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	j.FinishedAt, _ = time.Parse(time.RFC3339, fin)
+	return &j, nil
+}
+
+func aiGenJobArgs(j AIGenJob) []any {
+	tags, _ := json.Marshal(j.Tags)
+	if tags == nil {
+		tags = []byte("[]")
+	}
+	publish := 0
+	if j.Publish {
+		publish = 1
+	}
+	return []any{j.ID, j.Status, j.Stage, j.Model, j.TopicHint, publish, j.Error,
+		j.Title, j.Slug, j.Summary, string(tags), j.PostID,
+		j.CreatedAt.UTC().Format(time.RFC3339), j.FinishedAt.UTC().Format(time.RFC3339)}
+}
+
+// UpsertAIGenJob implements Store (idempotent: INSERT or full UPDATE).
+func (s *SQLite) UpsertAIGenJob(ctx context.Context, j AIGenJob) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO ai_generation_jobs (`+aiGenJobCols+`) VALUES (
+		?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET
+			status=excluded.status, stage=excluded.stage, model=excluded.model,
+			topic_hint=excluded.topic_hint, publish=excluded.publish,
+			error=excluded.error, title=excluded.title, slug=excluded.slug,
+			summary=excluded.summary, tags=excluded.tags, post_id=excluded.post_id,
+			created_at=excluded.created_at, finished_at=excluded.finished_at`,
+		aiGenJobArgs(j)...)
+	return err
+}
+
+// ListAIGenJobs implements Store.
+func (s *SQLite) ListAIGenJobs(ctx context.Context, limit int) ([]AIGenJob, error) {
+	q := "SELECT " + aiGenJobCols + " FROM ai_generation_jobs ORDER BY created_at DESC"
+	if limit > 0 {
+		q += " LIMIT " + fmt.Sprintf("%d", limit)
+	}
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AIGenJob
+	for rows.Next() {
+		j, err := aiGenJobFromRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *j)
+	}
+	return out, rows.Err()
+}
+
+// FailStaleAIGenJobs implements Store.
+func (s *SQLite) FailStaleAIGenJobs(ctx context.Context, cutoff time.Time, note string) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE ai_generation_jobs SET status='failed', stage='Interrupted', error=?, finished_at=?
+		 WHERE status IN ('queued','planning','writing','publishing') AND created_at < ?`,
+		note, time.Now().UTC().Format(time.RFC3339), cutoff.UTC().Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // ---------------------------------------------------------------------------

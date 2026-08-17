@@ -30,6 +30,7 @@ type Server struct {
 	backup      *storage.Backup
 	dbPath      string
 	indexNowKey string // IndexNow key; empty disables search-engine pings
+	aiJobs      *aiJobRegistry
 }
 
 // SetBackup attaches the S3 backup pipeline to the server for instant write sync.
@@ -63,9 +64,14 @@ func New(st store.Store, staticFS fs.FS) *Server {
 		startedAt:   time.Now(),
 		loginHits:   map[string][]time.Time{},
 		indexNowKey: os.Getenv("INDEXNOW_KEY"),
+		aiJobs:      newAIJobRegistry(),
 	}
 	s.initAdmin()
 	s.applySettings()
+	// Any AI runs that were mid-flight when the previous process exited
+	// would otherwise sit in the history as "queued/planning" forever.
+	// Mark them failed shortly after boot.
+	go s.recoverInterruptedAIGenJobs()
 	return s
 }
 
@@ -76,6 +82,25 @@ func (s *Server) applySettings() {
 	title, _ := s.Store.GetSetting(ctx, "site_title")
 	desc, _ := s.Store.GetSetting(ctx, "site_desc")
 	data.SetSiteIdentity(title, desc)
+}
+
+// recoverInterruptedAIGenJobs marks persisted AI runs that were left in a
+// non-terminal state (queued/planning/writing/publishing) by a previous
+// process that died mid-run, so the dashboard history stays accurate.
+func (s *Server) recoverInterruptedAIGenJobs() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// A healthy run finishes well within 10 minutes; anything older that
+	// never reached a terminal state was interrupted.
+	cutoff := time.Now().UTC().Add(-10 * time.Minute)
+	n, err := s.Store.FailStaleAIGenJobs(ctx, cutoff, "interrupted by server restart")
+	if err != nil {
+		log.Printf("ai jobs: stale recovery: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("ai jobs: marked %d interrupted run(s) as failed", n)
+	}
 }
 
 // staticHandler serves embedded static assets with a day-long cache so
@@ -158,7 +183,16 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /admin/posts/save", s.adminOnly(http.HandlerFunc(s.handleAdminPostSave)))
 	mux.Handle("POST /admin/posts/{id}/delete", s.adminOnly(http.HandlerFunc(s.handleAdminPostDelete)))
 	mux.Handle("POST /admin/posts/preview", s.adminOnly(http.HandlerFunc(s.handleAdminPostPreview)))
-	mux.Handle("POST /admin/posts/generate-ai", s.adminOnly(http.HandlerFunc(s.handleAdminPostGenerateAI)))
+	mux.Handle("POST /admin/ai/generate", s.adminOnly(http.HandlerFunc(s.handleAdminAIGenerate)))
+	mux.Handle("GET /admin/ai/generate/status", s.adminOnly(http.HandlerFunc(s.handleAdminAIStatus)))
+	mux.Handle("GET /admin/ai/generate/load", s.adminOnly(http.HandlerFunc(s.handleAdminAILoad)))
+
+	// Automatic AI blog generation ping endpoint. The external scheduler
+	// (cron-job.org, GitHub Actions, …) pings this URL; the AI pipeline
+	// picks the next topic from the blog history and publishes it.
+	mux.HandleFunc("POST /api/ai/generate", s.handleAIGeneratePing)
+	mux.HandleFunc("GET /api/ai/generate", s.handleAIGeneratePing)
+	mux.HandleFunc("GET /api/ai/generate/status", s.handleAIGenerateStatus)
 	mux.Handle("GET /admin/messages", s.adminOnly(http.HandlerFunc(s.handleAdminMessages)))
 	mux.Handle("POST /admin/messages/{id}/delete", s.adminOnly(http.HandlerFunc(s.handleAdminMessageDelete)))
 	mux.Handle("GET /admin/projects", s.adminOnly(http.HandlerFunc(s.handleAdminProjects)))

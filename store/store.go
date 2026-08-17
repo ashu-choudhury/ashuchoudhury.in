@@ -86,6 +86,26 @@ type Post struct {
 	UpdatedAt   time.Time
 }
 
+// AIGenJob is a persisted record of one AI blog-generation run (the
+// two-session pipeline). Status values: queued, planning, writing,
+// publishing, published, done, failed.
+type AIGenJob struct {
+	ID         string // job token (primary key, also used in status URLs)
+	Status     string
+	Stage      string // human-readable progress text
+	Model      string
+	TopicHint  string
+	Publish    bool // auto-publish (ping endpoint) vs. draft (admin editor)
+	Error      string
+	Title      string // result fields — filled when the writer finishes
+	Slug       string
+	Summary    string
+	Tags       []string
+	PostID     int64
+	CreatedAt  time.Time
+	FinishedAt time.Time
+}
+
 // Message is a contact-form submission.
 type Message struct {
 	ID        int64
@@ -158,6 +178,16 @@ type Store interface {
 	CreateSession(ctx context.Context, s Session) error
 	SessionValid(ctx context.Context, token string) (bool, error)
 	DeleteSession(ctx context.Context, token string) error
+
+	// AI generation jobs (history of automatic blog runs)
+	// UpsertAIGenJob creates or updates a run record (idempotent).
+	UpsertAIGenJob(ctx context.Context, j AIGenJob) error
+	// ListAIGenJobs returns recent runs, newest first. limit <= 0 means all.
+	ListAIGenJobs(ctx context.Context, limit int) ([]AIGenJob, error)
+	// FailStaleAIGenJobs marks non-terminal runs created before cutoff as
+	// failed (startup recovery for runs interrupted by a restart). Returns
+	// the number of runs marked.
+	FailStaleAIGenJobs(ctx context.Context, cutoff time.Time, note string) (int, error)
 
 	// Settings
 	GetSetting(ctx context.Context, key string) (string, error)
