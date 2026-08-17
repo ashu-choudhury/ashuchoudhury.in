@@ -95,7 +95,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 
 		client := importer.NewClient(owner)
 		if content, err := client.Readme(fetchCtx, repo); err == nil && strings.TrimSpace(content) != "" {
-			readmeHTML = renderMarkdown(content)
+			readmeHTML = renderMarkdownRich(content)
 		} else if err != nil {
 			log.Printf("handleProjectDetail: live fetch readme for %s/%s: %v", owner, repo, err)
 		}
@@ -103,7 +103,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 
 	descHTML := ""
 	if p.Description != "" {
-		descHTML = renderMarkdown(p.Description)
+		descHTML = renderMarkdownRich(p.Description)
 	}
 
 	next := s.nextProject(r.Context(), p)

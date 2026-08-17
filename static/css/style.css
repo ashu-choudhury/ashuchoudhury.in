@@ -969,6 +969,25 @@ section { padding-block: 4.5rem; }
   .admin-topbar { padding: 16px 14px 2px; }
 }
 
+/* ---------- Code blocks with copy button (handlers/markdown.go) ---------- */
+.code-block { margin: 1.1em 0; }
+.code-block-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface-2); border: 1px solid var(--border); border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 6px 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted);
+}
+.code-block-lang { text-transform: uppercase; letter-spacing: 0.06em; }
+.code-copy-btn {
+  font-family: inherit; font-size: 0.75rem; color: var(--text-soft);
+  background: transparent; border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 10px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+}
+.code-copy-btn:hover { color: var(--text); border-color: var(--accent-3); }
+.code-copy-btn.copied { color: var(--accent-3); border-color: var(--accent-3); }
+/* The header sits directly above the <pre>; square off the pre's top edge. */
+.code-block > pre, .code-block > pre[class] { margin: 0; border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+
 /* ---------- Experience timeline (About) ---------- */
 .experience-list { display: flex; flex-direction: column; gap: 0; max-width: 860px; margin: 0 auto; }
 .experience-item { position: relative; display: flex; gap: 18px; padding: 0 0 26px 0; }

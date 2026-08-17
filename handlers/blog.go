@@ -11,27 +11,7 @@ import (
 	"github.com/ashu-choudhury/portfolio/components"
 	"github.com/ashu-choudhury/portfolio/data"
 	"github.com/ashu-choudhury/portfolio/store"
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/renderer/html"
 )
-
-// markdown is the shared goldmark renderer used for blog posts and the
-// admin preview. Safe HTML is kept (same trust model as the admin editor).
-var markdown = goldmark.New(
-	goldmark.WithExtensions(extension.GFM, extension.Typographer),
-	goldmark.WithRendererOptions(html.WithUnsafe()),
-)
-
-// renderMarkdown converts Markdown source to HTML.
-func renderMarkdown(src string) string {
-	var buf bytes.Buffer
-	if err := markdown.Convert([]byte(src), &buf); err != nil {
-		log.Printf("markdown: %v", err)
-		return "<p>Could not render this post.</p>"
-	}
-	return buf.String()
-}
 
 func (s *Server) handleBlogIndex(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -71,7 +51,7 @@ func (s *Server) handleBlogPost(w http.ResponseWriter, r *http.Request) {
 		s.handleNotFound(w, r)
 		return
 	}
-	s.render(w, r, data.BlogPostMeta(p, theme(r)), components.BlogPostPage(*p, renderMarkdown(p.Body)))
+	s.render(w, r, data.BlogPostMeta(p, theme(r)), components.BlogPostPage(*p, renderMarkdownRich(p.Body)))
 }
 
 // handleBlogFeed serves an RSS 2.0 feed of published posts.

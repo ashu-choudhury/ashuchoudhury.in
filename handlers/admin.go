@@ -156,19 +156,19 @@ func (s *Server) handleAdminPostNew(w http.ResponseWriter, r *http.Request) {
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, errMsg, renderMarkdown(p.Body), models, cfg.Model, "", nil))
+			components.AdminPostForm(p, true, errMsg, renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	if _, err := s.Store.GetPost(r.Context(), p.Slug); err == nil {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
+			components.AdminPostForm(p, true, "A post with this slug already exists.", renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	id, err := s.Store.CreatePost(r.Context(), *p)
 	if err != nil {
 		log.Printf("admin: create post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
+			components.AdminPostForm(p, true, "Could not save the post — the slug may already be taken.", renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	http.Redirect(w, r, "/admin/posts/"+itoa64(id)+"/edit", http.StatusSeeOther)
@@ -190,7 +190,7 @@ func (s *Server) handleAdminPostEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-		components.AdminPostForm(p, false, "", renderMarkdown(p.Body), models, cfg.Model, "", nil))
+		components.AdminPostForm(p, false, "", renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 }
 
 func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
@@ -201,13 +201,13 @@ func (s *Server) handleAdminPostSave(w http.ResponseWriter, r *http.Request) {
 	p, errMsg := s.parsePostForm(r)
 	if errMsg != "" {
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, errMsg, renderMarkdown(p.Body), models, cfg.Model, "", nil))
+			components.AdminPostForm(p, false, errMsg, renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	if err := s.Store.UpdatePost(ctx, *p); err != nil {
 		log.Printf("admin: update post: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit post", Active: "posts"},
-			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdown(p.Body), models, cfg.Model, "", nil))
+			components.AdminPostForm(p, false, "Could not save the post.", renderMarkdownRich(p.Body), models, cfg.Model, "", nil))
 		return
 	}
 	s.TriggerBackup(ctx)
@@ -236,13 +236,13 @@ func (s *Server) handleAdminAIGenerate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("admin generate ai: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "New post", Active: "posts"},
-			components.AdminPostForm(p, isNew, "AI Generation failed: "+err.Error(), renderMarkdown(p.Body), models, selectedModel, topic, nil))
+			components.AdminPostForm(p, isNew, "AI Generation failed: "+err.Error(), renderMarkdownRich(p.Body), models, selectedModel, topic, nil))
 		return
 	}
 
 	card := &components.AIGenCard{JobID: jobID, Status: aiStatusQueued, Stage: "Preparing…"}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.AdminPostForm(p, isNew, "", renderMarkdown(p.Body), models, selectedModel, topic, card).Render(ctx, w)
+	components.AdminPostForm(p, isNew, "", renderMarkdownRich(p.Body), models, selectedModel, topic, card).Render(ctx, w)
 }
 
 // handleAdminAIStatus renders the live progress card for a generation job.
@@ -291,7 +291,7 @@ func (s *Server) handleAdminAILoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.AdminPostForm(p, true, "", renderMarkdown(p.Body), models, model, topic, nil).Render(ctx, w)
+	components.AdminPostForm(p, true, "", renderMarkdownRich(p.Body), models, model, topic, nil).Render(ctx, w)
 }
 
 func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
@@ -311,7 +311,7 @@ func (s *Server) handleAdminPostDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminPostPreview(w http.ResponseWriter, r *http.Request) {
 	body := r.FormValue("body")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.AdminPreview(renderMarkdown(body)).Render(r.Context(), w)
+	components.AdminPreview(renderMarkdownRich(body)).Render(r.Context(), w)
 }
 
 // parsePostForm reads and validates the post form into a store.Post.
@@ -488,7 +488,7 @@ func (s *Server) handleAdminProjectEdit(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit project", Active: "projects"},
-		components.AdminProjectForm(p, false, "", renderMarkdown(p.Description)))
+		components.AdminProjectForm(p, false, "", renderMarkdownRich(p.Description)))
 }
 
 func (s *Server) handleAdminProjectSave(w http.ResponseWriter, r *http.Request) {
@@ -499,14 +499,14 @@ func (s *Server) handleAdminProjectSave(w http.ResponseWriter, r *http.Request) 
 			title = "New project"
 		}
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: title, Active: "projects"},
-			components.AdminProjectForm(p, isNew, errMsg, renderMarkdown(p.Description)))
+			components.AdminProjectForm(p, isNew, errMsg, renderMarkdownRich(p.Description)))
 		return
 	}
 
 	if err := s.Store.UpsertProject(r.Context(), *p); err != nil {
 		log.Printf("admin: save project: %v", err)
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Edit project", Active: "projects"},
-			components.AdminProjectForm(p, isNew, "Could not save project.", renderMarkdown(p.Description)))
+			components.AdminProjectForm(p, isNew, "Could not save project.", renderMarkdownRich(p.Description)))
 		return
 	}
 	s.TriggerBackup(r.Context())
