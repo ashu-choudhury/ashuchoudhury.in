@@ -66,7 +66,12 @@ func newMockZoho(t *testing.T) *mockZoho {
 			mode, _ := payload["mode"].(string)
 			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":{"messageId":"999","mode":"` + mode + `"}}`))
 		case r.URL.Path == "/api/accounts/42/folders/1/messages/101/content":
-			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":{"content":"<p>Body</p>","plainText":"Body","subject":"Hello","fromAddress":"a@b.com"}}`))
+			// Real shape: messageId comes back as a NUMBER here (unlike the
+			// list endpoints, which send it as a string), and the body has
+			// no subject/from metadata — that lives in the details endpoint.
+			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":{"messageId":101,"content":"<p>Body</p>","plainText":"Body"}}`))
+		case r.URL.Path == "/api/accounts/42/folders/1/messages/101/details":
+			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":{"subject":"Hello","fromAddress":"a@b.com","toAddress":"b@c.com","receivedTime":"1700000000000"}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(`{"status":{"code":404,"description":"not found"}}`))
@@ -283,12 +288,30 @@ func TestSendRejectsEmptyRecipients(t *testing.T) {
 
 func TestMessageContent(t *testing.T) {
 	m := newMockZoho(t)
-	c, err := m.client.MessageContent(context.Background(), "1", "101", true)
+	c, err := m.client.MessageContent(context.Background(), "1", "101")
 	if err != nil {
 		t.Fatalf("MessageContent: %v", err)
 	}
 	if c.Content != "<p>Body</p>" || c.PlainText != "Body" {
 		t.Errorf("unexpected content: %+v", c)
+	}
+	if string(c.MessageID) != "101" {
+		t.Errorf("numeric messageId not normalized: %q", string(c.MessageID))
+	}
+}
+
+// TestMessageContentSendsNoParams is the production regression: Zoho's
+// content endpoint rejects extra query params with "Extra parameters
+// given (code 400)", which broke opening any message. The request must
+// carry no query string at all.
+func TestMessageContentSendsNoParams(t *testing.T) {
+	m := newMockZoho(t)
+	if _, err := m.client.MessageContent(context.Background(), "1", "101"); err != nil {
+		t.Fatalf("MessageContent: %v", err)
+	}
+	last := m.mailCalls[len(m.mailCalls)-1]
+	if last.URL.RawQuery != "" {
+		t.Errorf("content request must have no query params, got %q", last.URL.RawQuery)
 	}
 }
 

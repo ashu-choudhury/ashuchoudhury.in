@@ -274,8 +274,7 @@ templ AdminMailRead(d MailReadData) {
 			<div class="m-2">
 				<a class="btn btn-ghost btn-sm" href="/admin/mail">Back to mail</a>
 			</div>
-			return
-		}
+		} else {
 		<div class="mail-read-actions">
 			@MailReadAction(d, "reply", "Reply")
 			@MailReadAction(d, "replyall", "Reply all")
@@ -370,6 +369,7 @@ templ AdminMailRead(d MailReadData) {
 				<button class="btn btn-ghost btn-sm danger" type="submit">Delete</button>
 			</form>
 		</div>
+		}
 	</div>
 }
 

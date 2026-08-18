@@ -164,22 +164,46 @@ func (s *Server) handleAdminMailMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	content, err := c.MessageContent(ctx, folderID, messageID, true)
+	// The content endpoint returns only the body; subject/from/to/date
+	// come from the details endpoint. Merge both, preferring details.
+	content, err := c.MessageContent(ctx, folderID, messageID)
 	if err != nil {
 		d := components.MailReadData{FolderID: folderID, MessageID: messageID, Error: "Could not load this message: " + err.Error()}
 		s.renderMailFragment(w, r, components.AdminMailRead(d), nil)
 		return
 	}
+	details, _ := c.MessageDetails(ctx, folderID, messageID)
 	atts, _ := c.AttachmentInfo(ctx, folderID, messageID)
+
+	subject := details.Subject
+	from := details.FromAddress
+	to := details.ToAddress
+	cc := details.CcAddress
+	received := details.ReceivedTime
+	if subject == "" {
+		subject = content.Subject
+	}
+	if from == "" {
+		from = content.FromAddress
+	}
+	if to == "" {
+		to = content.ToAddress
+	}
+	if cc == "" {
+		cc = content.CcAddress
+	}
+	if received == "" {
+		received = content.ReceivedTime
+	}
 
 	d := components.MailReadData{
 		FolderID:    folderID,
 		MessageID:   messageID,
-		Subject:     content.Subject,
-		FromAddress: content.FromAddress,
-		ToAddress:   content.ToAddress,
-		CcAddress:   content.CcAddress,
-		Date:        components.MailFullDate(parseMillis(content.ReceivedTime)),
+		Subject:     subject,
+		FromAddress: from,
+		ToAddress:   to,
+		CcAddress:   cc,
+		Date:        components.MailFullDate(parseMillis(received)),
 		BodyHTML:    components.SanitizeMailHTML(content.Content, folderID, messageID),
 		BodyText:    content.PlainText,
 		Attachments: atts,
@@ -190,11 +214,11 @@ func (s *Server) handleAdminMailMessage(w http.ResponseWriter, r *http.Request) 
 	// list swap (which would lose scroll position).
 	row := zoho.MessageSummary{
 		MessageID:     messageID,
-		Subject:       content.Subject,
-		FromAddress:   content.FromAddress,
-		ToAddress:     content.ToAddress,
+		Subject:       subject,
+		FromAddress:   from,
+		ToAddress:     to,
 		Summary:       content.PlainText,
-		ReceivedTime:  content.ReceivedTime,
+		ReceivedTime:  received,
 		Status:        "1",
 		HasAttachment: boolStr8(len(atts) > 0),
 	}
@@ -231,39 +255,63 @@ func (s *Server) handleAdminMailCompose(w http.ResponseWriter, r *http.Request) 
 			s.renderMailFragment(w, r, components.AdminMailCompose(d), nil)
 			return
 		}
-		content, err := c.MessageContent(ctx, folderID, msgID, true)
+		// Content carries only the body; the metadata (subject, from, to,
+		// cc, date) lives in the details endpoint — merge both so reply /
+		// forward / draft-edit pre-fill correctly.
+		content, err := c.MessageContent(ctx, folderID, msgID)
 		if err != nil {
 			d.Error = "Could not load the original message: " + err.Error()
 			s.renderMailFragment(w, r, components.AdminMailCompose(d), nil)
 			return
 		}
+		details, _ := c.MessageDetails(ctx, folderID, msgID)
+		subject := details.Subject
+		from := details.FromAddress
+		to := details.ToAddress
+		cc := details.CcAddress
+		received := details.ReceivedTime
+		if subject == "" {
+			subject = content.Subject
+		}
+		if from == "" {
+			from = content.FromAddress
+		}
+		if to == "" {
+			to = content.ToAddress
+		}
+		if cc == "" {
+			cc = content.CcAddress
+		}
+		if received == "" {
+			received = content.ReceivedTime
+		}
 		myEmail, _ := s.Store.GetSetting(ctx, settingZohoEmail)
 
 		switch mode {
 		case "reply":
-			d.To = components.MailEmail(content.FromAddress)
-			d.Subject = replySubject(content.Subject, "Re")
+			d.To = components.MailEmail(from)
+			d.Subject = replySubject(subject, "Re")
 			d.ReplyMsgID = msgID
 			d.ReplyAction = "reply"
 		case "replyall":
-			d.To = joinExcluding(content.ToAddress, myEmail)
-			d.Cc = joinExcluding(content.CcAddress, myEmail)
-			d.Subject = replySubject(content.Subject, "Re")
+			d.To = joinExcluding(to, myEmail)
+			d.Cc = joinExcluding(cc, myEmail)
+			d.Subject = replySubject(subject, "Re")
 			d.ReplyMsgID = msgID
 			d.ReplyAction = "replyall"
 		case "forward":
-			d.Subject = replySubject(content.Subject, "Fwd")
+			d.Subject = replySubject(subject, "Fwd")
 			body := content.PlainText
 			if body == "" {
 				body = content.Content
 			}
-			d.Body = "---------- Forwarded message ----------\nFrom: " + content.FromAddress +
-				"\nDate: " + components.MailFullDate(parseMillis(content.ReceivedTime)) +
-				"\nSubject: " + content.Subject + "\n\n" + body
+			d.Body = "---------- Forwarded message ----------\nFrom: " + from +
+				"\nDate: " + components.MailFullDate(parseMillis(received)) +
+				"\nSubject: " + subject + "\n\n" + body
 		case "draft":
-			d.To = components.MailCleanAddresses(content.ToAddress)
-			d.Cc = components.MailCleanAddresses(content.CcAddress)
-			d.Subject = content.Subject
+			d.To = components.MailCleanAddresses(to)
+			d.Cc = components.MailCleanAddresses(cc)
+			d.Subject = subject
 			body := content.PlainText
 			if body == "" {
 				body = content.Content

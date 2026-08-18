@@ -211,18 +211,38 @@ type Attachment struct {
 
 // MessageContent is the full body of one message.
 type MessageContent struct {
-	Content      string `json:"content"`
-	PlainText    string `json:"plainText"`
-	Subject      string `json:"subject"`
-	Sender       string `json:"sender"`
-	FromAddress  string `json:"fromAddress"`
-	ToAddress    string `json:"toAddress"`
-	CcAddress    string `json:"ccAddress"`
-	BccAddress   string `json:"bccAddress"`
-	ReceivedTime string `json:"receivedTime"`
-	SentDate     string `json:"sentDateInGMT"`
-	MessageID    string `json:"messageId"`
-	Size         string `json:"size"`
+	Content      string     `json:"content"`
+	PlainText    string     `json:"plainText"`
+	Subject      string     `json:"subject"`
+	Sender       string     `json:"sender"`
+	FromAddress  string     `json:"fromAddress"`
+	ToAddress    string     `json:"toAddress"`
+	CcAddress    string     `json:"ccAddress"`
+	BccAddress   string     `json:"bccAddress"`
+	ReceivedTime string     `json:"receivedTime"`
+	SentDate     string     `json:"sentDateInGMT"`
+	MessageID    flexString `json:"messageId"`
+	Size         string     `json:"size"`
+}
+
+// flexString accepts both a JSON string and a JSON number. Zoho's content
+// endpoint returns messageId as a number while every other endpoint sends
+// the same id as a string — tolerating both keeps parsing shape-agnostic.
+type flexString string
+
+// UnmarshalJSON implements json.Unmarshaler for flexString.
+func (f *flexString) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*f = flexString(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err == nil {
+		*f = flexString(n.String())
+		return nil
+	}
+	return fmt.Errorf("zoho: cannot unmarshal %s into flexString", b)
 }
 
 // MessageDetails is the metadata of one message (headers etc.).
@@ -747,14 +767,14 @@ func (c *Client) SearchMessages(ctx context.Context, query string) ([]MessageSum
 // MessageContent fetches the body of one message. When html is true the
 // HTML representation is preferred (content field); otherwise the plain
 // text.
-func (c *Client) MessageContent(ctx context.Context, folderID, messageID string, html bool) (*MessageContent, error) {
-	q := url.Values{}
-	if html {
-		q.Set("mode", "html")
-	}
+// MessageContent fetches the full body of one message. Zoho's content
+// endpoint takes no query parameters (it always returns the HTML content,
+// plus plainText when available) — an earlier "mode=html" param was
+// rejected with "Extra parameters given (code 400)".
+func (c *Client) MessageContent(ctx context.Context, folderID, messageID string) (*MessageContent, error) {
 	path := "/accounts/" + c.AccountID + "/folders/" + folderID + "/messages/" + messageID + "/content"
 	var out MessageContent
-	if err := c.apiGet(ctx, path, q, &out); err != nil {
+	if err := c.apiGet(ctx, path, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
