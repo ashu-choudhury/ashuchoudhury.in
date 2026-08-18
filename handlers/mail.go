@@ -246,6 +246,25 @@ func (s *Server) handleAdminMailConnect(w http.ResponseWriter, r *http.Request) 
 	}
 	_ = s.Store.SetSetting(ctx, settingZohoClientID, cid)
 	_ = s.Store.SetSetting(ctx, settingZohoClientSecret, secret)
+
+	// Optional paste-a-token path: a Self Client refresh token generated
+	// in the Zoho API Console (app → Self Client → Generate Token) skips
+	// the OAuth redirect entirely. The next /admin/mail load validates it
+	// by refreshing and listing the account — a bad token surfaces a
+	// clear reconnect message there.
+	if rt := strings.TrimSpace(r.FormValue("refresh_token")); rt != "" {
+		_ = s.Store.SetSetting(ctx, settingZohoRefreshToken, rt)
+		// A pasted token may belong to a different account than a stale
+		// saved identity — drop it so the account is re-fetched.
+		_ = s.Store.SetSetting(ctx, settingZohoAccountID, "")
+		_ = s.Store.SetSetting(ctx, settingZohoEmail, "")
+		_ = s.Store.SetSetting(ctx, settingZohoAccessToken, "")
+		_ = s.Store.SetSetting(ctx, settingZohoAccessExpiry, "")
+		s.TriggerBackup(ctx)
+		http.Redirect(w, r, "/admin/mail", http.StatusSeeOther)
+		return
+	}
+
 	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/mail/oauth/start", http.StatusSeeOther)
 }
@@ -290,7 +309,7 @@ func (s *Server) handleAdminMailOAuthCallback(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := c.ExchangeCode(ctx, code, mailRedirectURI(r)); err != nil {
-		log.Printf("admin mail: token exchange: %v", err)
+		log.Printf("admin mail: token exchange failed: %v", err)
 		http.Redirect(w, r, "/admin/mail?err="+url.QueryEscape("Token exchange failed: "+err.Error()), http.StatusSeeOther)
 		return
 	}
@@ -312,6 +331,7 @@ func (s *Server) handleAdminMailOAuthCallback(w http.ResponseWriter, r *http.Req
 		}
 		break
 	}
+	log.Printf("admin mail: connected Zoho Mail account %s", c.AccountID)
 	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/mail", http.StatusSeeOther)
 }

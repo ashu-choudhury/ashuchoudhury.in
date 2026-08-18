@@ -220,7 +220,7 @@ func AdminMailConnect(d MailConnectData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" placeholder=\"••••••••••••\"></div><p class=\"form-note\">Your Zoho Mail region is fixed to <strong>India</strong> (<code>mail.zoho.in</code>) — no region selection needed.</p><div class=\"admin-form-actions\"><button class=\"btn btn-primary\" type=\"submit\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" placeholder=\"••••••••••••\"></div><div class=\"form-field\"><label for=\"zoho-refresh-token\">Refresh token <em>(optional — paste a Self Client token to skip the Zoho login)</em></label> <input id=\"zoho-refresh-token\" name=\"refresh_token\" type=\"password\" placeholder=\"1000.xxxxxxxxxxxxxxxxxxxx\"><p class=\"form-note\">In the <a href=\"https://api-console.zoho.in/\" target=\"_blank\" rel=\"noopener noreferrer\">Zoho API Console</a> open your app → <strong>Self Client</strong> → select the scopes (<code>ZohoMail.messages.ALL</code>, <code>ZohoMail.accounts.READ</code>, <code>ZohoMail.folders.READ</code>, <code>ZohoMail.attachments.ALL</code>) → <strong>Generate Token</strong>, then paste the token here and click Connect. Leave it empty to authorize through the normal Zoho login instead.</p></div><p class=\"form-note\">Your Zoho Mail region is fixed to <strong>India</strong> (<code>mail.zoho.in</code>) — no region selection needed. When Zoho shows the consent screen, approve it: Zoho only issues a refresh token after consent.</p><div class=\"admin-form-actions\"><button class=\"btn btn-primary\" type=\"submit\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -269,7 +269,7 @@ func AdminMailShell(d MailListData) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/compose?folder=" + d.ActiveFolder)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 97, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 102, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -300,7 +300,7 @@ func AdminMailShell(d MailListData) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs("/admin/mail?folder=" + f.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 105, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 110, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -326,7 +326,7 @@ func AdminMailShell(d MailListData) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + f.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 106, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 111, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -339,7 +339,7 @@ func AdminMailShell(d MailListData) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(mailFolderCurrent(f.FolderID, d.ActiveFolder))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 109, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 114, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -360,7 +360,7 @@ func AdminMailShell(d MailListData) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(f.FolderName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 111, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 116, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -378,7 +378,7 @@ func AdminMailShell(d MailListData) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 116, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 121, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -417,7 +417,7 @@ func AdminMailShell(d MailListData) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 118, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 123, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -485,7 +485,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/compose?folder=" + d.ActiveFolder)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 137, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 142, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
@@ -516,7 +516,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 			var templ_7745c5c3_Var24 templ.SafeURL
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs("/admin/mail?folder=" + f.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 145, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 150, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -542,7 +542,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + f.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 146, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 151, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -555,7 +555,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(mailFolderCurrent(f.FolderID, d.ActiveFolder))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 149, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 154, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
@@ -576,7 +576,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(f.FolderName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 151, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 156, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -594,7 +594,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 156, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 161, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -633,7 +633,7 @@ func AdminMailFolders(d MailListData) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 158, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 163, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -685,7 +685,7 @@ func AdminMailList(d MailListData) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(mailListTitle(d))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 170, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 175, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -721,7 +721,7 @@ func AdminMailList(d MailListData) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(d.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 194, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 199, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -766,7 +766,7 @@ func AdminMailList(d MailListData) templ.Component {
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + d.ActiveFolder + "?start=" + itoa(mailPrevStart(d)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 210, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 215, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 				if templ_7745c5c3_Err != nil {
@@ -785,7 +785,7 @@ func AdminMailList(d MailListData) templ.Component {
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + d.ActiveFolder + "?start=" + itoa(mailNextStart(d)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 216, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 221, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 				if templ_7745c5c3_Err != nil {
@@ -803,7 +803,7 @@ func AdminMailList(d MailListData) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(len(d.Messages)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 220, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 225, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -855,7 +855,7 @@ func AdminMailRow(m zoho.MessageSummary, folderID, activeMessage string, oob boo
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue("msg-row-" + m.MessageID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 230, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 235, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 			if templ_7745c5c3_Err != nil {
@@ -899,7 +899,7 @@ func AdminMailRow(m zoho.MessageSummary, folderID, activeMessage string, oob boo
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue("msg-row-" + m.MessageID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 234, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 239, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 			if templ_7745c5c3_Err != nil {
@@ -963,7 +963,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var46 templ.SafeURL
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinURLErrs("/admin/mail/message/" + folderID + "/" + m.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 242, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 247, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -976,7 +976,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/message/" + folderID + "/" + m.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 243, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 248, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
@@ -989,7 +989,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(mailName(m.FromAddress))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 247, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 252, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1002,7 +1002,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(mailSubject(m.Subject))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 248, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 253, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
@@ -1015,7 +1015,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(mailSnippet(m.Summary))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 249, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 254, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1038,7 +1038,7 @@ func AdminMailRowInner(m zoho.MessageSummary, folderID string) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(mailWhen(m.ReceivedAt()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 254, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 259, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -1095,7 +1095,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var53 string
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(d.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 267, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 272, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -1130,7 +1130,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/compose?folder=" + d.FolderID + "&msg=" + d.MessageID + "&mode=draft")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 280, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 285, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 			if templ_7745c5c3_Err != nil {
@@ -1156,7 +1156,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(mailSubject(d.Subject))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 289, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 294, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1169,7 +1169,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(mailName(d.FromAddress))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 291, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 296, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
@@ -1182,7 +1182,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(mailEmail(d.FromAddress))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 292, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 297, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1195,7 +1195,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(mailAddressList(d.ToAddress))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 295, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 300, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1213,7 +1213,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var59 string
 			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(mailAddressList(d.CcAddress))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 297, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 302, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 			if templ_7745c5c3_Err != nil {
@@ -1227,7 +1227,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(d.Date)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 300, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 305, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 		if templ_7745c5c3_Err != nil {
@@ -1250,7 +1250,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 				var templ_7745c5c3_Var61 templ.SafeURL
 				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinURLErrs("/admin/mail/attachment/" + d.FolderID + "/" + d.MessageID + "/" + a.AttachmentID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 305, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 310, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {
@@ -1271,7 +1271,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 				var templ_7745c5c3_Var62 string
 				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(a.AttachmentName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 307, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 312, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 				if templ_7745c5c3_Err != nil {
@@ -1284,7 +1284,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 				var templ_7745c5c3_Var63 string
 				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(mailSize(a.AttachmentSize))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 308, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 313, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 				if templ_7745c5c3_Err != nil {
@@ -1317,7 +1317,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(d.BodyText)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 317, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 322, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1335,7 +1335,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 322, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 327, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 		if templ_7745c5c3_Err != nil {
@@ -1348,7 +1348,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 324, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 329, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 		if templ_7745c5c3_Err != nil {
@@ -1361,7 +1361,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 325, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 330, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 		if templ_7745c5c3_Err != nil {
@@ -1382,7 +1382,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 329, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 334, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1395,7 +1395,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 331, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 336, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 		if templ_7745c5c3_Err != nil {
@@ -1408,7 +1408,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 332, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 337, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 		if templ_7745c5c3_Err != nil {
@@ -1429,7 +1429,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 336, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 341, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 		if templ_7745c5c3_Err != nil {
@@ -1442,7 +1442,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 338, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 343, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 		if templ_7745c5c3_Err != nil {
@@ -1455,7 +1455,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var73 string
 		templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 339, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 344, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var73)
 		if templ_7745c5c3_Err != nil {
@@ -1476,7 +1476,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var74 string
 		templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 343, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 348, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var74)
 		if templ_7745c5c3_Err != nil {
@@ -1489,7 +1489,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var75 string
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 345, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 350, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var75)
 		if templ_7745c5c3_Err != nil {
@@ -1502,7 +1502,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var76 string
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 346, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 351, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var76)
 		if templ_7745c5c3_Err != nil {
@@ -1523,7 +1523,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 350, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 355, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 		if templ_7745c5c3_Err != nil {
@@ -1536,7 +1536,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var78 string
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 352, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 357, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 		if templ_7745c5c3_Err != nil {
@@ -1549,7 +1549,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 353, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 358, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 		if templ_7745c5c3_Err != nil {
@@ -1567,7 +1567,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 357, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 362, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var80)
 			if templ_7745c5c3_Err != nil {
@@ -1580,7 +1580,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(f.FolderName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 357, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 362, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 			if templ_7745c5c3_Err != nil {
@@ -1598,7 +1598,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 362, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 367, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var82)
 		if templ_7745c5c3_Err != nil {
@@ -1611,7 +1611,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 363, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 368, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var83)
 		if templ_7745c5c3_Err != nil {
@@ -1624,7 +1624,7 @@ func AdminMailRead(d MailReadData) templ.Component {
 		var templ_7745c5c3_Var84 string
 		templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.MessageID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 364, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 369, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var84)
 		if templ_7745c5c3_Err != nil {
@@ -1667,7 +1667,7 @@ func MailReadAction(d MailReadData, mode, label string) templ.Component {
 		var templ_7745c5c3_Var86 string
 		templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/compose?folder=" + d.FolderID + "&msg=" + d.MessageID + "&mode=" + mode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 374, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 379, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 		if templ_7745c5c3_Err != nil {
@@ -1684,7 +1684,7 @@ func MailReadAction(d MailReadData, mode, label string) templ.Component {
 		var templ_7745c5c3_Var87 string
 		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 378, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 383, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 		if templ_7745c5c3_Err != nil {
@@ -1741,7 +1741,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 			var templ_7745c5c3_Var89 string
 			templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(d.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 390, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 395, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 			if templ_7745c5c3_Err != nil {
@@ -1759,7 +1759,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var90 string
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfValue())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 399, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 404, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var90)
 		if templ_7745c5c3_Err != nil {
@@ -1772,7 +1772,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var91 string
 		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.FolderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 400, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 405, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 		if templ_7745c5c3_Err != nil {
@@ -1785,7 +1785,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.DraftID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 401, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 406, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 		if templ_7745c5c3_Err != nil {
@@ -1798,7 +1798,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var93 string
 		templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ReplyMsgID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 402, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 407, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var93)
 		if templ_7745c5c3_Err != nil {
@@ -1811,7 +1811,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var94 string
 		templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ReplyAction)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 403, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 408, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 		if templ_7745c5c3_Err != nil {
@@ -1824,7 +1824,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var95 string
 		templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.To)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 406, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 411, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var95)
 		if templ_7745c5c3_Err != nil {
@@ -1837,7 +1837,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var96 string
 		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Cc)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 410, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 415, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 		if templ_7745c5c3_Err != nil {
@@ -1850,7 +1850,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var97 string
 		templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Bcc)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 414, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 419, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var97)
 		if templ_7745c5c3_Err != nil {
@@ -1863,7 +1863,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 		var templ_7745c5c3_Var98 string
 		templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Subject)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 418, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 423, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var98)
 		if templ_7745c5c3_Err != nil {
@@ -1905,7 +1905,7 @@ func AdminMailCompose(d MailComposeData) templ.Component {
 			var templ_7745c5c3_Var99 string
 			templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + d.FolderID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 453, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 458, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 			if templ_7745c5c3_Err != nil {
@@ -1961,7 +1961,7 @@ func AdminMailBodyTextarea(value string) templ.Component {
 		var templ_7745c5c3_Var101 string
 		templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 471, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 476, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 		if templ_7745c5c3_Err != nil {
@@ -2004,7 +2004,7 @@ func AdminMailRefineNote(text string) templ.Component {
 		var templ_7745c5c3_Var103 string
 		templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 476, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 481, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 		if templ_7745c5c3_Err != nil {
@@ -2097,7 +2097,7 @@ func AdminMailStatus(ok bool, msg string, folderID string) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 495, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 500, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -2119,7 +2119,7 @@ func AdminMailStatus(ok bool, msg string, folderID string) templ.Component {
 			var templ_7745c5c3_Var107 string
 			templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 499, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 504, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
 			if templ_7745c5c3_Err != nil {
@@ -2145,7 +2145,7 @@ func AdminMailStatus(ok bool, msg string, folderID string) templ.Component {
 		var templ_7745c5c3_Var108 string
 		templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.ResolveAttributeValue("/admin/mail/folder/" + folderID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 510, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/mail.templ`, Line: 515, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var108)
 		if templ_7745c5c3_Err != nil {

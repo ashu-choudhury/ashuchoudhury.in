@@ -74,7 +74,12 @@ templ AdminMailConnect(d MailConnectData) {
 				<label for="zoho-client-secret">Client Secret</label>
 				<input id="zoho-client-secret" name="client_secret" type="password" required value={ d.ClientSecret } placeholder="••••••••••••"/>
 			</div>
-			<p class="form-note">Your Zoho Mail region is fixed to <strong>India</strong> (<code>mail.zoho.in</code>) — no region selection needed.</p>
+			<div class="form-field">
+				<label for="zoho-refresh-token">Refresh token <em>(optional — paste a Self Client token to skip the Zoho login)</em></label>
+				<input id="zoho-refresh-token" name="refresh_token" type="password" placeholder="1000.xxxxxxxxxxxxxxxxxxxx"/>
+				<p class="form-note">In the <a href="https://api-console.zoho.in/" target="_blank" rel="noopener noreferrer">Zoho API Console</a> open your app → <strong>Self Client</strong> → select the scopes (<code>ZohoMail.messages.ALL</code>, <code>ZohoMail.accounts.READ</code>, <code>ZohoMail.folders.READ</code>, <code>ZohoMail.attachments.ALL</code>) → <strong>Generate Token</strong>, then paste the token here and click Connect. Leave it empty to authorize through the normal Zoho login instead.</p>
+			</div>
+			<p class="form-note">Your Zoho Mail region is fixed to <strong>India</strong> (<code>mail.zoho.in</code>) — no region selection needed. When Zoho shows the consent screen, approve it: Zoho only issues a refresh token after consent.</p>
 			<div class="admin-form-actions">
 				<button class="btn btn-primary" type="submit">
 					@Icon("mail", 16)

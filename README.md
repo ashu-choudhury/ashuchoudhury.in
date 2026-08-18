@@ -66,6 +66,11 @@ The admin panel includes a full email client backed by the free Zoho Mail REST A
 
 The data center is **fixed to India** (`accounts.zoho.in` / `mail.zoho.in`) — there is no region selector, because selectable regions caused OAuth token mismatches for the Indian account.
 
+Two ways to authorize:
+
+1. **OAuth consent** — click **Connect Zoho Mail**, log in with your Zoho India account, and **approve the consent screen** (Zoho only issues a refresh token when consent is shown).
+2. **Paste a Self Client token** — in the API console open your app → **Self Client** → select the scopes (`ZohoMail.messages.ALL`, `ZohoMail.accounts.READ`, `ZohoMail.folders.READ`, `ZohoMail.attachments.ALL`) → **Generate Token**, and paste the token into the *Refresh token* field on the connect screen. This skips the OAuth redirect entirely.
+
 Tokens are stored in the `settings` table and refreshed automatically (access tokens live one hour). The API works on the free Zoho Mail plans — sending limits are dynamic per account reputation.
 
 Credentials can also live in the environment — `ZOHO_CLIENT_ID` and `ZOHO_CLIENT_SECRET` are seeded into the settings table at boot (only when set, so an empty var never wipes a value entered on the connect screen). A `.env` file next to the binary is loaded automatically (real environment variables win). The data center is always India (`mail.zoho.in`).

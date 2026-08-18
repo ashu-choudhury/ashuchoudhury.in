@@ -322,6 +322,14 @@ func (c *Client) AuthURL(redirectURI, state, scope, accessType string) string {
 	if accessType != "" {
 		q.Set("access_type", accessType)
 	}
+	// Zoho only issues a refresh token when the consent screen is shown.
+	// On a repeat authorization without prompt=consent it returns an
+	// access token and NO refresh token, which silently breaks reconnect
+	// (the caller saves an empty refresh token and stays disconnected).
+	// Connecting always re-prompts — and thereby re-issues a fresh
+	// refresh token, replacing the previous one (fine: the connect
+	// screen is the re-authorization action).
+	q.Set("prompt", "consent")
 	if state != "" {
 		q.Set("state", state)
 	}
@@ -361,13 +369,18 @@ func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) err
 	if tr.AccessToken == "" {
 		return fmt.Errorf("zoho: token exchange failed: %s", tr.Error)
 	}
+	if tr.RefreshToken == "" {
+		// Zoho skips the refresh token on repeat authorizations unless
+		// consent is shown again. Without this guard the callback would
+		// silently save an empty refresh token and the connect screen
+		// would never advance.
+		return fmt.Errorf("zoho: Zoho returned an access token but no refresh token — approve the consent screen when Zoho shows it (Zoho only issues a refresh token after consent), or paste a Self Client token from the API console instead")
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.AccessToken = tr.AccessToken
-	if tr.RefreshToken != "" {
-		c.RefreshToken = tr.RefreshToken
-	}
+	c.RefreshToken = tr.RefreshToken
 	c.AccessExpiry = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
 	if c.onTokens != nil {
 		c.onTokens(c.AccessToken, c.AccessExpiry)

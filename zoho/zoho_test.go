@@ -98,6 +98,56 @@ func newMockZoho(t *testing.T) *mockZoho {
 	return m
 }
 
+// TestAuthURLAlwaysAsksConsent pins the fix for the silent reconnect loop:
+// Zoho only issues a refresh token when the consent screen is shown, so the
+// authorization URL must always carry prompt=consent.
+func TestAuthURLAlwaysAsksConsent(t *testing.T) {
+	c := &Client{ClientID: "cid", DataCenter: India}
+	u := c.AuthURL("https://x/callback", "st", "scopes", "offline")
+	if !strings.Contains(u, "prompt=consent") {
+		t.Errorf("authorization URL missing prompt=consent: %s", u)
+	}
+	if !strings.Contains(u, "access_type=offline") {
+		t.Errorf("authorization URL missing access_type=offline: %s", u)
+	}
+}
+
+// TestExchangeCodeRequiresRefreshToken is the exact silent-failure mode
+// from production: Zoho answers a repeat authorization with an access
+// token but no refresh token, which used to save an empty refresh token
+// and bounce the user back to the connect screen forever.
+func TestExchangeCodeRequiresRefreshToken(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Access token only — no refresh_token field.
+		w.Write([]byte(`{"access_token":"acc","expires_in":3600}`))
+	}))
+	defer ts.Close()
+	c := &Client{ClientID: "cid", ClientSecret: "secret", DataCenter: DataCenter{Accounts: ts.URL}, HTTP: ts.Client()}
+	err := c.ExchangeCode(context.Background(), "code", "https://x/callback")
+	if err == nil {
+		t.Fatal("want an error when Zoho returns no refresh token")
+	}
+	if !strings.Contains(err.Error(), "no refresh token") {
+		t.Errorf("error should explain the missing refresh token: %v", err)
+	}
+}
+
+// TestExchangeCodeSavesRefreshToken is the happy path: the token endpoint
+// returns access + refresh tokens and both land on the client.
+func TestExchangeCodeSavesRefreshToken(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"access_token":"acc","refresh_token":"ref","expires_in":3600}`))
+	}))
+	defer ts.Close()
+	c := &Client{ClientID: "cid", ClientSecret: "secret", DataCenter: DataCenter{Accounts: ts.URL}, HTTP: ts.Client()}
+	if err := c.ExchangeCode(context.Background(), "code", "https://x/callback"); err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if c.AccessToken != "acc" || c.RefreshToken != "ref" {
+		t.Errorf("tokens not saved: access=%q refresh=%q", c.AccessToken, c.RefreshToken)
+	}
+}
+
 func TestListMessagesParsesEnvelope(t *testing.T) {
 	m := newMockZoho(t)
 	msgs, err := m.client.ListMessages(context.Background(), "1", 1, 30, "all")
