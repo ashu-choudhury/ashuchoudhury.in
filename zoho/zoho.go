@@ -104,14 +104,80 @@ func isAuthFailure(code int, message string) bool {
 	return false
 }
 
+// EmailAddr is one entry in an account's emailAddress array: the primary
+// mailbox address or an alias.
+type EmailAddr struct {
+	IsAlias     bool   `json:"isAlias"`
+	IsPrimary   bool   `json:"isPrimary"`
+	MailID      string `json:"mailId"`
+	IsConfirmed bool   `json:"isConfirmed"`
+}
+
+// emailAddrList parses Zoho's emailAddress field, which the docs show as
+// an array of objects ({isAlias,isPrimary,mailId,…}) — but some accounts
+// return a plain array of strings instead. Tolerating both keeps the
+// connect flow from dying on either shape.
+type emailAddrList []EmailAddr
+
+// UnmarshalJSON accepts the documented object-array shape and falls back
+// to a plain string array.
+func (e *emailAddrList) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	var objs []EmailAddr
+	if err := json.Unmarshal(b, &objs); err == nil {
+		*e = objs
+		return nil
+	}
+	var strs []string
+	if err := json.Unmarshal(b, &strs); err == nil {
+		out := make([]EmailAddr, 0, len(strs))
+		for _, s := range strs {
+			if s == "" {
+				continue
+			}
+			out = append(out, EmailAddr{MailID: s, IsPrimary: len(out) == 0})
+		}
+		*e = out
+		return nil
+	}
+	return fmt.Errorf("zoho: unexpected emailAddress shape: %.200s", b)
+}
+
 // Account is one mailbox account in the user's Zoho profile.
 type Account struct {
-	AccountID        string `json:"accountId"`
-	DisplayName      string `json:"displayName"`
-	EmailAddress     string `json:"emailAddress"`
-	AccountType      string `json:"accountType"`
-	IsMailboxCreated bool   `json:"isMailboxCreated"`
-	IsMailboxEnabled bool   `json:"isMailboxEnabled"`
+	AccountID           string        `json:"accountId"`
+	DisplayName         string        `json:"displayName"`
+	AccountType         string        `json:"accountType"`
+	EmailAddress        emailAddrList `json:"emailAddress"`
+	PrimaryEmailAddress string        `json:"primaryEmailAddress"`
+	MailboxAddress      string        `json:"mailboxAddress"`
+	IsMailboxCreated    bool          `json:"isMailboxCreated"`
+	IsMailboxEnabled    bool          `json:"isMailboxEnabled"`
+}
+
+// PrimaryEmail returns the best email address for the account: Zoho's
+// plain primaryEmailAddress / mailboxAddress strings when present, else
+// the primary (or first) entry of the emailAddress array.
+func (a Account) PrimaryEmail() string {
+	if a.PrimaryEmailAddress != "" {
+		return a.PrimaryEmailAddress
+	}
+	if a.MailboxAddress != "" {
+		return a.MailboxAddress
+	}
+	for _, e := range a.EmailAddress {
+		if e.IsPrimary && e.MailID != "" {
+			return e.MailID
+		}
+	}
+	for _, e := range a.EmailAddress {
+		if e.MailID != "" {
+			return e.MailID
+		}
+	}
+	return ""
 }
 
 // Folder is a mailbox folder (Inbox, Sent, Drafts, Spam, Trash, custom…).

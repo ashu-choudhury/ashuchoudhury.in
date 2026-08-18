@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -37,6 +38,23 @@ const zohoMailScope = "ZohoMail.messages.ALL,ZohoMail.accounts.READ,ZohoMail.fol
 
 // errZohoNotConfigured signals missing client credentials.
 var errZohoNotConfigured = errors.New("zoho mail is not configured")
+
+// seedZohoFromEnv fills the Zoho settings table from the environment so
+// credentials can live in .env / the deployment config instead of only
+// the connect form. Each variable is applied only when set, so an empty
+// env var never wipes a value the admin entered on the connect screen.
+func (s *Server) seedZohoFromEnv() {
+	ctx := rctx()
+	for _, kv := range []struct{ env, key string }{
+		{"ZOHO_CLIENT_ID", settingZohoClientID},
+		{"ZOHO_CLIENT_SECRET", settingZohoClientSecret},
+		{"ZOHO_DATA_CENTER", settingZohoDataCenter},
+	} {
+		if v := strings.TrimSpace(os.Getenv(kv.env)); v != "" {
+			_ = s.Store.SetSetting(ctx, kv.key, v)
+		}
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Client factory
@@ -142,9 +160,9 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				_ = s.Store.SetSetting(ctx, settingZohoAccountID, a.AccountID)
-				if a.EmailAddress != "" {
-					_ = s.Store.SetSetting(ctx, settingZohoEmail, a.EmailAddress)
-					email = a.EmailAddress
+				if em := a.PrimaryEmail(); em != "" {
+					_ = s.Store.SetSetting(ctx, settingZohoEmail, em)
+					email = em
 				}
 				c.AccountID = a.AccountID
 				break
@@ -299,8 +317,8 @@ func (s *Server) handleAdminMailOAuthCallback(w http.ResponseWriter, r *http.Req
 			continue
 		}
 		_ = s.Store.SetSetting(ctx, settingZohoAccountID, a.AccountID)
-		if a.EmailAddress != "" {
-			_ = s.Store.SetSetting(ctx, settingZohoEmail, a.EmailAddress)
+		if em := a.PrimaryEmail(); em != "" {
+			_ = s.Store.SetSetting(ctx, settingZohoEmail, em)
 		}
 		break
 	}

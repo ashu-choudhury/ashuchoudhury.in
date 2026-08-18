@@ -39,6 +39,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -50,6 +51,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,7 +66,40 @@ import (
 //go:embed all:static
 var staticFS embed.FS
 
+// loadDotenv fills the process environment from a KEY=VALUE file without
+// overwriting variables the caller already exported. It is intentionally
+// tiny and dependency-free (a full dotenv library is overkill for a single
+// binary); the canonical .env lives next to the binary and is gitignored.
+func loadDotenv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // no .env — fine, use the real environment
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		k = strings.TrimSpace(k)
+		if !ok || k == "" {
+			continue
+		}
+		v = strings.Trim(strings.TrimSpace(v), `"'`)
+		if _, exists := os.LookupEnv(k); !exists {
+			_ = os.Setenv(k, v)
+		}
+	}
+}
+
 func main() {
+	// A .env file in the working directory (gitignored) is loaded first so
+	// DB_PATH, TURSO_DATABASE_URL, ZOHO_* and the rest can live there —
+	// real environment variables always win.
+	loadDotenv(".env")
+
 	// ------------------------------------------------------------------
 	// Database: the store is the center point. Swap implementations here —
 	// store.OpenSQLite (persistent) or store.NewMemory (ephemeral) — and
@@ -151,7 +186,6 @@ func main() {
 	// Ping search engines with the sitemap on every boot (also covers the
 	// startup project dedupe). No-op without INDEXNOW_KEY.
 	go server.NotifySearchEngines()
-
 
 	addr := os.Getenv("PORT")
 	if addr == "" {

@@ -68,6 +68,7 @@ func New(st store.Store, staticFS fs.FS) *Server {
 	}
 	s.initAdmin()
 	s.applySettings()
+	s.seedZohoFromEnv()
 	// Any AI runs that were mid-flight when the previous process exited
 	// would otherwise sit in the history as "queued/planning" forever.
 	// Mark them failed shortly after boot.

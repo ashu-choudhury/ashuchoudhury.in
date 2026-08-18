@@ -66,6 +66,8 @@ The admin panel includes a full email client backed by the free Zoho Mail REST A
 
 Tokens are stored in the `settings` table and refreshed automatically (access tokens live one hour). The API works on the free Zoho Mail plans — sending limits are dynamic per account reputation.
 
+Credentials can also live in the environment — `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_DATA_CENTER` are seeded into the settings table at boot (only when set, so an empty var never wipes a value entered on the connect screen). A `.env` file next to the binary is loaded automatically (real environment variables win). Pick the data center matching your Zoho Mail URL — `mail.zoho.in` → India, `mail.zoho.com` → US, `mail.zoho.sa` → Saudi Arabia, etc.
+
 ### Capabilities
 
 - **Folders**: full tree (Inbox, Sent, Drafts, Spam, Trash, custom folders) with pagination.

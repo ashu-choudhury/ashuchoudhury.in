@@ -46,6 +46,10 @@ func newMockZoho(t *testing.T) *mockZoho {
 
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == "/api/accounts":
+			// Real Zoho shape: emailAddress is an array of objects and the
+			// primary address also appears as a plain string.
+			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":[{"accountId":"42","displayName":"Ashu","primaryEmailAddress":"ashu@example.com","emailAddress":[{"isAlias":false,"isPrimary":true,"mailId":"ashu@example.com","isConfirmed":true}]}]}`))
 		case r.URL.Path == "/api/accounts/42/folders":
 			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":[
 				{"folderId":"1","folderName":"Inbox","folderType":"Inbox"},
@@ -75,8 +79,6 @@ func newMockZoho(t *testing.T) *mockZoho {
 		switch {
 		case strings.Contains(r.URL.Path, "/oauth/v2/token") && r.FormValue("grant_type") == "refresh_token":
 			w.Write([]byte(`{"access_token":"fresh-token","expires_in":3600,"api_domain":"` + m.mail.URL + `"}`))
-		case r.URL.Path == "/api/accounts":
-			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":[{"accountId":"42","displayName":"Ashu","emailAddress":"ashu@example.com"}]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -135,6 +137,57 @@ func TestFolders(t *testing.T) {
 	}
 	if len(fs) != 2 || fs[0].FolderName != "Inbox" {
 		t.Fatalf("unexpected folders: %+v", fs)
+	}
+}
+
+// TestAccountsParsesRealShape is the exact regression from production:
+// Zoho returns emailAddress as an array of objects, which crashed the old
+// string field with "cannot unmarshal array into Go struct field …".
+func TestAccountsParsesRealShape(t *testing.T) {
+	m := newMockZoho(t)
+	as, err := m.client.Accounts(context.Background())
+	if err != nil {
+		t.Fatalf("Accounts: %v", err)
+	}
+	if len(as) != 1 || as[0].AccountID != "42" {
+		t.Fatalf("unexpected accounts: %+v", as)
+	}
+	if got := as[0].PrimaryEmail(); got != "ashu@example.com" {
+		t.Errorf("PrimaryEmail: want ashu@example.com, got %q", got)
+	}
+}
+
+// TestAccountPrimaryEmailFallbacks covers the fallback ladder: the plain
+// primaryEmailAddress string first, then mailboxAddress, then the array's
+// primary (or first) entry — and the tolerant string-array shape.
+func TestAccountPrimaryEmailFallbacks(t *testing.T) {
+	cases := []struct {
+		name string
+		json string
+		want string
+	}{
+		{"primaryEmailAddress wins",
+			`{"primaryEmailAddress":"a@x.com","emailAddress":[{"isPrimary":true,"mailId":"b@x.com"}]}`, "a@x.com"},
+		{"mailboxAddress fallback",
+			`{"mailboxAddress":"c@x.com","emailAddress":[{"isPrimary":true,"mailId":"b@x.com"}]}`, "c@x.com"},
+		{"array primary entry",
+			`{"emailAddress":[{"isPrimary":false,"mailId":"alias@x.com"},{"isPrimary":true,"mailId":"main@x.com"}]}`, "main@x.com"},
+		{"array first entry",
+			`{"emailAddress":[{"isPrimary":false,"mailId":"only@x.com"}]}`, "only@x.com"},
+		{"string array tolerated",
+			`{"emailAddress":["str@x.com"]}`, "str@x.com"},
+		{"empty", `{}`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var a Account
+			if err := json.Unmarshal([]byte(tc.json), &a); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if got := a.PrimaryEmail(); got != tc.want {
+				t.Errorf("PrimaryEmail: want %q, got %q", tc.want, got)
+			}
+		})
 	}
 }
 
