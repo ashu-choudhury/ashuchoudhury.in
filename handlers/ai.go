@@ -202,6 +202,45 @@ func (c *AIClient) chat(ctx context.Context, messages []openAIMessage) (string, 
 	return "", lastErr
 }
 
+// emailRefineSystemPrompt is the system prompt for the compose-pane
+// "Refine with AI" button. It asks for a polished rewrite that keeps every
+// concrete detail and returns plain, well-paragraphed text (which the mail
+// client renders as formatted HTML on send) — never markdown symbols.
+const emailRefineSystemPrompt = `You are an expert email writer. Given a draft email, rewrite it into a polished, professional message that preserves the writer's meaning, tone and every concrete detail (names, numbers, links, dates). Improve clarity, flow, grammar and formatting.
+
+Formatting rules:
+- Start with an appropriate greeting (e.g. "Hi [name]," or "Hello,") and end with a short sign-off ("Thanks," / "Best regards," and the writer's name if present).
+- Keep paragraphs short, separated by a blank line. Never use markdown symbols (no **, *, #, or backticks).
+- Use a bullet list only when the draft used one; otherwise use plain paragraphs.
+- Never invent facts, names, URLs or details that are not in the draft.
+- Reply with ONLY the rewritten email text — no preamble, no quotes, no explanation.`
+
+// RefineEmail rewrites a draft email into a polished, well-formatted
+// version using the configured model. subject (optional) gives context.
+// Returns plain text ready to paste into the compose box.
+func (c *AIClient) RefineEmail(ctx context.Context, subject, draft string) (string, error) {
+	draft = strings.TrimSpace(draft)
+	if draft == "" {
+		return "", errors.New("nothing to refine — the message body is empty")
+	}
+	user := "Draft email body:\n\n" + draft
+	if s := strings.TrimSpace(subject); s != "" {
+		user = "Email subject: " + s + "\n\n" + user
+	}
+	content, err := c.chat(ctx, []openAIMessage{
+		{Role: "system", Content: emailRefineSystemPrompt},
+		{Role: "user", Content: user},
+	})
+	if err != nil {
+		return "", err
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "", errors.New("AI returned an empty rewrite — try again")
+	}
+	return content, nil
+}
+
 // SuggestNextTopic runs session 1: given the site's blog history (and an
 // optional hint), it returns one topic decision. The session ends here.
 func (c *AIClient) SuggestNextTopic(ctx context.Context, history []store.Post, hint string) (*AIBlogPlan, error) {

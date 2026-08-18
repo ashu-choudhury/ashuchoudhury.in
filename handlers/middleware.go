@@ -39,18 +39,34 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		if styleCSPHash != "" {
 			styleSrc += " " + styleCSPHash
 		}
-		h.Set("Content-Security-Policy", strings.Join([]string{
+		imgSrc := "img-src 'self' data:"
+		styleSrcAttr := ""
+		// The admin mail client renders incoming email HTML, which embeds
+		// images hosted on arbitrary servers and styles itself with inline
+		// style attributes — allow both, but only on the mail pages. A
+		// dedicated style-src-attr directive is required: a hash in
+		// style-src makes 'unsafe-inline' a no-op for style attributes, and
+		// hashes never match attributes (CSP3).
+		if strings.HasPrefix(r.URL.Path, "/admin/mail") {
+			imgSrc += " https: http:"
+			styleSrcAttr = "style-src-attr 'unsafe-inline'"
+		}
+		directives := []string{
 			"default-src 'self'",
 			"script-src 'self'",
 			styleSrc,
-			"img-src 'self' data:",
+			imgSrc,
 			"font-src 'self'",
 			"connect-src 'self'",
 			"object-src 'none'",
 			"base-uri 'self'",
 			"frame-ancestors 'none'",
 			"form-action 'self'",
-		}, "; "))
+		}
+		if styleSrcAttr != "" {
+			directives = append(directives, styleSrcAttr)
+		}
+		h.Set("Content-Security-Policy", strings.Join(directives, "; "))
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")

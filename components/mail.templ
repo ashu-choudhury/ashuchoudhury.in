@@ -1,0 +1,525 @@
+package components
+
+import (
+	"strings"
+
+	"github.com/ashu-choudhury/portfolio/zoho"
+)
+
+// ---------------------------------------------------------------------------
+// Connect screen
+
+// AdminMailConnect renders the "connect your Zoho Mail account" screen.
+templ AdminMailConnect(d MailConnectData) {
+	if d.Connected {
+		<div class="card admin-panel">
+			<div class="form-msg ok mb-2">
+				@Icon("check-circle", 17)
+				<div>Zoho Mail is connected as <strong>{ d.Email }</strong>.</div>
+			</div>
+			if d.Error != "" {
+				<div class="form-msg err mb-2">
+					@Icon("alert", 17)
+					<div>{ d.Error }</div>
+				</div>
+			}
+			<div class="admin-toolbar" style="display:flex; gap:10px; justify-content:flex-start;">
+				<a class="btn btn-primary" href="/admin/mail">
+					@Icon("mail", 16)
+					Open inbox
+				</a>
+				<form method="post" action="/admin/mail/disconnect">
+					<input type="hidden" name="csrf" value={ csrfValue() }/>
+					<button class="btn btn-ghost" type="submit">
+						@Icon("logout", 15)
+						Disconnect
+					</button>
+				</form>
+			</div>
+		</div>
+		return
+	}
+	<div class="card admin-panel" style="max-width: 720px;">
+		<h2 style="font-size:1.2rem; margin-bottom:0.5rem;">Connect Zoho Mail</h2>
+		<p class="form-note mb-2">
+			This admin panel becomes a full email client for your Zoho Mail account — inbox, folders,
+			reading, composing, sending, drafts, search and attachments. All traffic flows server-side
+			through the Zoho Mail REST API (free, OAuth 2.0).
+		</p>
+		if d.Error != "" {
+			<div class="form-msg err mb-2">
+				@Icon("alert", 17)
+				<div>{ d.Error }</div>
+			</div>
+		}
+		<ol class="mail-steps mb-3">
+			<li>Create a <strong>Server-based Application</strong> in the <a href="https://api-console.zoho.com/" target="_blank" rel="noopener noreferrer">Zoho API Console</a> — pick the console matching your data center (e.g. <code>api-console.zoho.in</code> in India).</li>
+			<li>Add the redirect URI below to the app's <strong>Authorized Redirect URIs</strong>.</li>
+			<li>Paste the Client ID and Client Secret here, pick your data center, then click Connect.</li>
+		</ol>
+		<div class="form-field">
+			<label>Authorized Redirect URI (register this in Zoho)</label>
+			<input type="text" readonly value={ d.RedirectURI } onclick="this.select()"/>
+		</div>
+		<form class="contact-form admin-form" method="post" action="/admin/mail/connect">
+			<input type="hidden" name="csrf" value={ csrfValue() }/>
+			<div class="form-field">
+				<label for="zoho-client-id">Client ID</label>
+				<input id="zoho-client-id" name="client_id" type="text" required value={ d.ClientID } placeholder="1000.XXXXXXXXXXXXXXX"/>
+			</div>
+			<div class="form-field">
+				<label for="zoho-client-secret">Client Secret</label>
+				<input id="zoho-client-secret" name="client_secret" type="password" required value={ d.ClientSecret } placeholder="••••••••••••"/>
+			</div>
+			<div class="form-field">
+				<label for="zoho-data-center">Data center</label>
+				<select id="zoho-data-center" name="data_center">
+					<option value="com" selected={ d.DataCenter == "com" }>United States (.com)</option>
+					<option value="eu" selected={ d.DataCenter == "eu" }>Europe (.eu)</option>
+					<option value="in" selected={ d.DataCenter == "in" }>India (.in)</option>
+					<option value="com.au" selected={ d.DataCenter == "com.au" }>Australia (.com.au)</option>
+					<option value="jp" selected={ d.DataCenter == "jp" }>Japan (.jp)</option>
+					<option value="ca" selected={ d.DataCenter == "ca" }>Canada (.ca)</option>
+					<option value="sa" selected={ d.DataCenter == "sa" }>Saudi Arabia (.sa)</option>
+				</select>
+				<p class="form-note">Pick the region your Zoho Mail URL uses — <code>mail.zoho.com</code> → United States, <code>mail.zoho.in</code> → India, etc.</p>
+			</div>
+			<div class="admin-form-actions">
+				<button class="btn btn-primary" type="submit">
+					@Icon("mail", 16)
+					Connect Zoho Mail
+				</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Full three-pane shell (initial page load)
+
+// AdminMailShell is the complete mail client: folders | list | read.
+templ AdminMailShell(d MailListData) {
+	<div class="mail-grid">
+		<aside class="mail-pane mail-folders" id="mail-folders">
+			<button class="btn btn-primary mail-compose-btn" type="button"
+				hx-get={ "/admin/mail/compose?folder=" + d.ActiveFolder }
+				hx-target="#mail-read"
+				hx-swap="innerHTML">
+				@Icon("plus", 16)
+				Compose
+			</button>
+			<nav class="mail-folder-nav" aria-label="Mail folders">
+				for _, f := range mailOrderFolders(d.Folders) {
+					<a href={ "/admin/mail?folder=" + f.FolderID } class={ mailFolderActive(f.FolderID, d.ActiveFolder) }
+						hx-get={ "/admin/mail/folder/" + f.FolderID }
+						hx-target="#mail-list"
+						hx-swap="innerHTML"
+						aria-current={ mailFolderCurrent(f.FolderID, d.ActiveFolder) }>
+						@Icon(mailFolderIcon(f.FolderName), 15)
+						<span>{ f.FolderName }</span>
+					</a>
+				}
+			</nav>
+			<div class="mail-folders-foot">
+				<span class="mail-account" title={ d.Email }>@Icon("mail", 13) { d.Email }</span>
+				<form method="post" action="/admin/mail/disconnect">
+					<input type="hidden" name="csrf" value={ csrfValue() }/>
+					<button class="mail-link-btn" type="submit" title="Disconnect Zoho Mail">@Icon("logout", 13) Disconnect</button>
+				</form>
+			</div>
+		</aside>
+		<section class="mail-pane mail-list" id="mail-list">
+			@AdminMailList(d)
+		</section>
+		<section class="mail-pane mail-read" id="mail-read">
+			@AdminMailEmpty()
+		</section>
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Folder sidebar fragment
+
+templ AdminMailFolders(d MailListData) {
+	<button class="btn btn-primary mail-compose-btn" type="button"
+		hx-get={ "/admin/mail/compose?folder=" + d.ActiveFolder }
+		hx-target="#mail-read"
+		hx-swap="innerHTML">
+		@Icon("plus", 16)
+		Compose
+	</button>
+	<nav class="mail-folder-nav" aria-label="Mail folders">
+		for _, f := range mailOrderFolders(d.Folders) {
+			<a href={ "/admin/mail?folder=" + f.FolderID } class={ mailFolderActive(f.FolderID, d.ActiveFolder) }
+				hx-get={ "/admin/mail/folder/" + f.FolderID }
+				hx-target="#mail-list"
+				hx-swap="innerHTML"
+				aria-current={ mailFolderCurrent(f.FolderID, d.ActiveFolder) }>
+				@Icon(mailFolderIcon(f.FolderName), 15)
+				<span>{ f.FolderName }</span>
+			</a>
+		}
+	</nav>
+	<div class="mail-folders-foot">
+		<span class="mail-account" title={ d.Email }>@Icon("mail", 13) { d.Email }</span>
+		<form method="post" action="/admin/mail/disconnect">
+			<input type="hidden" name="csrf" value={ csrfValue() }/>
+			<button class="mail-link-btn" type="submit" title="Disconnect Zoho Mail">@Icon("logout", 13) Disconnect</button>
+		</form>
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Message list pane
+
+templ AdminMailList(d MailListData) {
+	<div class="mail-list-head">
+		<div class="mail-list-title">
+			<strong>{ mailListTitle(d) }</strong>
+			if d.SearchQuery != "" {
+				<a class="btn btn-ghost btn-sm" href="/admin/mail"
+					hx-get="/admin/mail/folder/inbox"
+					hx-target="#mail-list"
+					hx-swap="innerHTML">✕ clear</a>
+			}
+		</div>
+		<div class="mail-search">
+			<input
+				type="search"
+				name="q"
+				placeholder="Search mail…"
+				autocomplete="off"
+				hx-get="/admin/mail/search"
+				hx-trigger="input changed delay:500ms, search"
+				hx-target="#mail-list"
+				hx-swap="innerHTML"
+				hx-preserve="true"/>
+		</div>
+	</div>
+	if d.Error != "" {
+		<div class="form-msg err m-2">
+			@Icon("alert", 17)
+			<div>{ d.Error }</div>
+		</div>
+	}
+	<div class="mail-rows" id="mail-list-rows">
+		if len(d.Messages) == 0 && d.Error == "" {
+			<p class="mail-empty-list">No messages here.</p>
+		} else {
+			for _, m := range d.Messages {
+				@AdminMailRow(m, mailRowFolder(d, m), d.ActiveMessage, false)
+			}
+		}
+	</div>
+	if d.ActiveFolder != "" {
+		<div class="mail-list-foot">
+			if d.Start > 1 {
+				<button class="btn btn-ghost btn-sm" type="button"
+					hx-get={ "/admin/mail/folder/" + d.ActiveFolder + "?start=" + itoa(mailPrevStart(d)) }
+					hx-target="#mail-list"
+					hx-swap="innerHTML">Newer</button>
+			}
+			if d.HasMore {
+				<button class="btn btn-ghost btn-sm" type="button"
+					hx-get={ "/admin/mail/folder/" + d.ActiveFolder + "?start=" + itoa(mailNextStart(d)) }
+					hx-target="#mail-list"
+					hx-swap="innerHTML">Older</button>
+			}
+			<span class="mail-list-count">{ itoa(len(d.Messages)) } shown</span>
+		</div>
+	}
+}
+
+// AdminMailRow is a single message row. When oob is true the row carries
+// hx-swap-oob="outerHTML" so the reading pane can refresh it in place
+// (read + active state) without re-swapping the whole list.
+templ AdminMailRow(m zoho.MessageSummary, folderID, activeMessage string, oob bool) {
+	if oob {
+		<div id={ "msg-row-" + m.MessageID } hx-swap-oob="outerHTML" class={ mailRowClass(m, activeMessage) }>
+			@AdminMailRowInner(m, folderID)
+		</div>
+	} else {
+		<div id={ "msg-row-" + m.MessageID } class={ mailRowClass(m, activeMessage) }>
+			@AdminMailRowInner(m, folderID)
+		</div>
+	}
+}
+
+templ AdminMailRowInner(m zoho.MessageSummary, folderID string) {
+	<a class="mail-row-link"
+		href={ "/admin/mail/message/" + folderID + "/" + m.MessageID }
+		hx-get={ "/admin/mail/message/" + folderID + "/" + m.MessageID }
+		hx-target="#mail-read"
+		hx-swap="innerHTML">
+		<span class="mail-row-main">
+			<span class="mail-row-sender">{ mailName(m.FromAddress) }</span>
+			<span class="mail-row-subject">{ mailSubject(m.Subject) }</span>
+			<span class="mail-row-snippet">{ mailSnippet(m.Summary) }</span>
+		</span>
+		<span class="mail-row-meta">
+			if m.HasAttachments() {
+				@Icon("paperclip", 13)
+			}				<span class="mail-row-date">{ mailWhen(m.ReceivedAt()) }</span>
+		</span>
+	</a>
+}
+
+// ---------------------------------------------------------------------------
+// Reading pane
+
+templ AdminMailRead(d MailReadData) {
+	<div class="mail-read-inner">
+		if d.Error != "" {
+			<div class="form-msg err m-2">
+				@Icon("alert", 17)
+				<div>{ d.Error }</div>
+			</div>
+			<div class="m-2">
+				<a class="btn btn-ghost btn-sm" href="/admin/mail">Back to mail</a>
+			</div>
+			return
+		}
+		<div class="mail-read-actions">
+			@MailReadAction(d, "reply", "Reply")
+			@MailReadAction(d, "replyall", "Reply all")
+			@MailReadAction(d, "forward", "Forward")
+			if strings.EqualFold(mailFolderName(d.Folders, d.FolderID), "drafts") && d.DraftEditable() {
+				<a class="btn btn-ghost btn-sm" href="#"
+					hx-get={ "/admin/mail/compose?folder=" + d.FolderID + "&msg=" + d.MessageID + "&mode=draft" }
+					hx-target="#mail-read"
+					hx-swap="innerHTML">
+					@Icon("draft", 14)
+					Edit draft
+				</a>
+			}
+		</div>
+		<div class="mail-read-meta">
+			<h2 class="mail-read-subject">{ mailSubject(d.Subject) }</h2>
+			<div class="mail-read-from">
+				<strong>{ mailName(d.FromAddress) }</strong>
+				<span class="muted">&lt;{ mailEmail(d.FromAddress) }&gt;</span>
+			</div>
+			<div class="mail-read-to">
+				<span class="muted">to</span> { mailAddressList(d.ToAddress) }
+				if d.CcAddress != "" {
+					<br/><span class="muted">cc</span> { mailAddressList(d.CcAddress) }
+				}
+			</div>
+			<div class="mail-read-date muted">{ d.Date }</div>
+		</div>
+		if len(d.Attachments) > 0 {
+			<div class="mail-read-attachments">
+				for _, a := range d.Attachments {
+					<a class="mail-attachment" href={ "/admin/mail/attachment/" + d.FolderID + "/" + d.MessageID + "/" + a.AttachmentID }>
+						@Icon("paperclip", 14)
+						<span class="mail-attachment-name">{ a.AttachmentName }</span>
+						<span class="muted">{ mailSize(a.AttachmentSize) }</span>
+					</a>
+				}
+			</div>
+		}
+		<div class="mail-read-body">
+			if d.BodyHTML != "" {
+				@templ.Raw(d.BodyHTML)
+			} else {
+				<pre class="mail-read-plain">{ d.BodyText }</pre>
+			}
+		</div>
+		<div class="mail-read-actions mail-read-actions-bottom">
+			<form class="inline-form" hx-post="/admin/mail/action" hx-target="#mail-read" hx-swap="innerHTML">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="action" value="archive"/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<button class="btn btn-ghost btn-sm" type="submit">@Icon("archive", 14) Archive</button>
+			</form>
+			<form class="inline-form" hx-post="/admin/mail/action" hx-target="#mail-read" hx-swap="innerHTML">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="action" value="spam"/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<button class="btn btn-ghost btn-sm" type="submit">@Icon("alert", 14) Spam</button>
+			</form>
+			<form class="inline-form" hx-post="/admin/mail/action" hx-target="#mail-read" hx-swap="innerHTML">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="action" value="trash"/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<button class="btn btn-ghost btn-sm" type="submit">@Icon("trash", 14) Trash</button>
+			</form>
+			<form class="inline-form" hx-post="/admin/mail/action" hx-target="#mail-read" hx-swap="innerHTML">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="action" value="unread"/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<button class="btn btn-ghost btn-sm" type="submit">@Icon("eye", 14) Mark unread</button>
+			</form>
+			<form class="inline-form" hx-post="/admin/mail/action" hx-target="#mail-read" hx-swap="innerHTML">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="action" value="move"/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<select name="dest_folder" class="inline-form-select" hx-trigger="change" aria-label="Move to folder">
+					<option value="">Move to…</option>
+					for _, f := range mailOrderFolders(d.Folders) {
+						<option value={ f.FolderID }>{ f.FolderName }</option>
+					}
+				</select>
+			</form>
+			<form class="inline-form" hx-post="/admin/mail/delete" hx-target="#mail-read" hx-swap="innerHTML" hx-confirm="Permanently delete this email?">
+				<input type="hidden" name="csrf" value={ csrfValue() }/>
+				<input type="hidden" name="folder_id" value={ d.FolderID }/>
+				<input type="hidden" name="message_id" value={ d.MessageID }/>
+				<button class="btn btn-ghost btn-sm danger" type="submit">Delete</button>
+			</form>
+		</div>
+	</div>
+}
+
+// MailReadAction renders one of the Reply / Reply all / Forward buttons.
+templ MailReadAction(d MailReadData, mode, label string) {
+	<a class="btn btn-ghost btn-sm" href="#"
+		hx-get={ "/admin/mail/compose?folder=" + d.FolderID + "&msg=" + d.MessageID + "&mode=" + mode }
+		hx-target="#mail-read"
+		hx-swap="innerHTML">
+		@Icon(mailActionIcon(mode), 14)
+		{ label }
+	</a>
+}
+
+// ---------------------------------------------------------------------------
+// Compose pane
+
+templ AdminMailCompose(d MailComposeData) {
+	<div class="mail-compose-wrap">
+		if d.Error != "" {
+			<div class="form-msg err mb-2">
+				@Icon("alert", 17)
+				<div>{ d.Error }</div>
+			</div>
+		}
+		<form class="mail-compose" method="post" action="/admin/mail/send"
+			hx-post="/admin/mail/send"
+			hx-target="#mail-read"
+			hx-swap="innerHTML"
+			hx-encoding="multipart/form-data"
+			enctype="multipart/form-data">
+			<input type="hidden" name="csrf" value={ csrfValue() }/>
+			<input type="hidden" name="folder_id" value={ d.FolderID }/>
+			<input type="hidden" name="draft_id" value={ d.DraftID }/>
+			<input type="hidden" name="reply_msg" value={ d.ReplyMsgID }/>
+			<input type="hidden" name="reply_action" value={ d.ReplyAction }/>
+			<div class="mail-compose-row">
+				<label for="mail-to">To</label>
+				<input id="mail-to" name="to" type="text" value={ d.To } placeholder="person@example.com, another@example.com" autofocus/>
+			</div>
+			<div class="mail-compose-row">
+				<label for="mail-cc">Cc</label>
+				<input id="mail-cc" name="cc" type="text" value={ d.Cc } placeholder="optional"/>
+			</div>
+			<div class="mail-compose-row">
+				<label for="mail-bcc">Bcc</label>
+				<input id="mail-bcc" name="bcc" type="text" value={ d.Bcc } placeholder="optional"/>
+			</div>
+			<div class="mail-compose-row">
+				<label for="mail-subject">Subject</label>
+				<input id="mail-subject" name="subject" type="text" value={ d.Subject }/>
+			</div>
+			@AdminMailBodyTextarea(d.Body)
+			<p class="form-note" style="margin:0;">Plain text or Markdown — converted to formatted HTML when sent. Paste raw HTML to send it as-is.</p>
+			<div class="mail-compose-row">
+				<label></label>
+				<div class="mail-compose-ai-controls">
+					<button class="btn btn-secondary btn-sm" type="button"
+						hx-post="/admin/mail/refine"
+						hx-include="closest form"
+						hx-target="#mail-body"
+						hx-swap="outerHTML"
+						hx-disabled-elt="this"
+						hx-indicator="#mail-refine-indicator">
+						@Icon("sparkles", 14)
+						Refine with AI
+					</button>
+					<span id="mail-refine-indicator" class="ai-spinner mail-refine-indicator" aria-hidden="true"></span>
+					<span id="mail-refine-note" class="form-note mail-refine-note"></span>
+				</div>
+			</div>
+			<div class="mail-compose-row">
+				<label for="mail-attachments">Attachments</label>
+				<input id="mail-attachments" name="attachments" type="file" multiple/>
+			</div>
+			<div class="mail-compose-actions">
+				<button class="btn btn-primary" type="submit" name="action" value="send">
+					@Icon("send", 15)
+					Send
+				</button>
+				<button class="btn btn-ghost" type="submit" name="action" value="draft">
+					Save draft
+				</button>
+				if d.FolderID != "" {
+					<button class="btn btn-ghost" type="button"
+						hx-get={ "/admin/mail/folder/" + d.FolderID }
+						hx-target="#mail-list"
+						hx-swap="innerHTML">
+						Discard
+					</button>
+				} else {
+					<a class="btn btn-ghost" href="/admin/mail">Discard</a>
+				}
+			</div>
+		</form>
+	</div>
+}
+
+// AdminMailBodyTextarea is the compose body editor. It has its own id so
+// the AI refine button can swap exactly this element with the rewritten
+// draft, leaving the rest of the form (recipients, subject, attachments)
+// untouched.
+templ AdminMailBodyTextarea(value string) {
+	<textarea id="mail-body" name="body" rows="16" placeholder="Write your message…">{ value }</textarea>
+}
+
+// AdminMailRefineNote is the small status line under the Refine button.
+templ AdminMailRefineNote(text string) {
+	<span>{ text }</span>
+}
+
+// ---------------------------------------------------------------------------
+// Small fragments
+
+// AdminMailEmpty is the reading pane placeholder.
+templ AdminMailEmpty() {
+	<div class="mail-empty">
+		<span class="mail-empty-icon">@Icon("mail", 26)</span>
+		<p>Select a message to read it, or hit Compose to write a new one.</p>
+	</div>
+}
+
+// AdminMailStatus shows a result after send / draft / actions.
+templ AdminMailStatus(ok bool, msg string, folderID string) {
+	<div class="mail-status">
+		if ok {
+			@Icon("check-circle", 22)
+			<strong>{ msg }</strong>
+		} else {
+			@Icon("alert", 22)
+			<strong>Something went wrong.</strong>
+			<p class="form-note">{ msg }</p>
+		}
+		<div class="admin-toolbar" style="display:flex; gap:10px; justify-content:flex-start;">
+			<button class="btn btn-primary" type="button"
+				hx-get="/admin/mail/compose"
+				hx-target="#mail-read"
+				hx-swap="innerHTML">
+				@Icon("plus", 15)
+				Compose another
+			</button>
+			<button class="btn btn-ghost" type="button"
+				hx-get={ "/admin/mail/folder/" + folderID }
+				hx-target="#mail-list"
+				hx-swap="innerHTML">
+				Back to folder
+			</button>
+		</div>
+	</div>
+}

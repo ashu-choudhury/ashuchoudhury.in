@@ -10,7 +10,7 @@ import (
 // AdminPageMeta carries the admin page title and active nav item.
 type AdminPageMeta struct {
 	Title  string
-	Active string // dashboard | posts | messages | projects | settings
+	Active string // dashboard | posts | messages | mail | projects | files | settings
 }
 
 // DashboardData is the analytics snapshot for the admin dashboard.
@@ -56,10 +56,14 @@ templ AdminLayout(meta AdminPageMeta, content templ.Component) {
 							@Icon("code", 16)
 							Posts
 						</a>
-						<a href="/admin/messages" aria-current={ adminActive(meta.Active, "messages") }>
-							@Icon("mail", 16)
-							Messages
-						</a>
+					<a href="/admin/messages" aria-current={ adminActive(meta.Active, "messages") }>
+						@Icon("mail", 16)
+						Messages
+					</a>
+					<a href="/admin/mail" aria-current={ adminActive(meta.Active, "mail") }>
+						@Icon("inbox", 16)
+						Mail
+					</a>
 						<a href="/admin/projects" aria-current={ adminActive(meta.Active, "projects") }>
 							@Icon("database", 16)
 							Projects

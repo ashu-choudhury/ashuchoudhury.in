@@ -54,6 +54,27 @@ saving (only the ping endpoint publishes automatically).
 
 ---
 
+## 📧 Admin Mail client (Zoho Mail API)
+
+The admin panel includes a full email client backed by the free Zoho Mail REST API — inbox and all folders, reading, composing, sending, drafts, search, attachments, archive/spam/trash/move and read/unread. Everything runs server-side through the Zoho Mail API (OAuth 2.0), so no mail credentials ever reach the browser.
+
+### One-time setup (Admin → Mail)
+
+1. Create a **Server-based Application** in the Zoho API Console for your data center (`https://api-console.zoho.com` for US, `.in` for India, `.eu` for Europe, …).
+2. Add the **Authorized Redirect URI** shown on the connect screen (e.g. `https://your-site/admin/mail/oauth/callback`) to that app.
+3. Paste the **Client ID** and **Client Secret**, pick your **data center**, and click **Connect Zoho Mail**. You'll be taken to Zoho's consent screen (scopes: `ZohoMail.messages.ALL`, `ZohoMail.accounts.READ`, `ZohoMail.folders.READ`, `ZohoMail.attachments.ALL`).
+
+Tokens are stored in the `settings` table and refreshed automatically (access tokens live one hour). The API works on the free Zoho Mail plans — sending limits are dynamic per account reputation.
+
+### Capabilities
+
+- **Folders**: full tree (Inbox, Sent, Drafts, Spam, Trash, custom folders) with pagination.
+- **Read**: HTML content with a sanitizer (scripts/handlers stripped, `cid:` inline images proxied through the server), plain-text fallback, attachment download links.
+- **Compose**: send, save draft, edit drafts, reply / reply-all (quoted server-side by Zoho), forward, multiple attachments. The body is written in plain text or **Markdown** (converted to formatted HTML on send — raw HTML passes through as-is), and a **Refine with AI** button rewrites the draft into a polished, well-formatted email using your configured AI provider.
+- **Manage**: archive, spam, trash, permanent delete, move between folders, mark read/unread, mailbox search.
+
+Rate limits and endpoint quirks are documented in `zoho/zoho.go`.
+
 ## Tech Stack
 
 - **Backend**: Go (Standard Library `net/http`)
