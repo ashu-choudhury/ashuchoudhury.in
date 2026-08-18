@@ -491,6 +491,28 @@ func (c *Client) ensureToken(ctx context.Context) error {
 	return c.refresh(ctx)
 }
 
+func (c *Client) ensureAccountID(ctx context.Context) error {
+	c.mu.Lock()
+	hasID := c.AccountID != ""
+	c.mu.Unlock()
+	if hasID {
+		return nil
+	}
+	accounts, err := c.Accounts(ctx)
+	if err != nil {
+		return fmt.Errorf("zoho: missing account id and failed to fetch accounts: %w", err)
+	}
+	for _, a := range accounts {
+		if a.AccountID != "" {
+			c.mu.Lock()
+			c.AccountID = a.AccountID
+			c.mu.Unlock()
+			return nil
+		}
+	}
+	return fmt.Errorf("zoho: no valid account id found for user")
+}
+
 // ---------------------------------------------------------------------------
 // HTTP plumbing
 
@@ -939,10 +961,13 @@ func (c *Client) UploadAttachments(ctx context.Context, files []UploadFile) ([]A
 	if err := c.ensureToken(ctx); err != nil {
 		return nil, err
 	}
+	if err := c.ensureAccountID(ctx); err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	for _, f := range files {
-		fw, err := mw.CreateFormFile("attachments", f.Name)
+		fw, err := mw.CreateFormFile("attach", f.Name)
 		if err != nil {
 			return nil, err
 		}

@@ -65,6 +65,8 @@ func newMockZoho(t *testing.T) *mockZoho {
 			_ = json.Unmarshal([]byte(body), &payload)
 			mode, _ := payload["mode"].(string)
 			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":{"messageId":"999","mode":"` + mode + `"}}`))
+		case r.URL.Path == "/api/accounts/42/messages/attachments":
+			w.Write([]byte(`{"status":{"code":200,"description":"success"},"data":[{"attachmentId":"att101","attachmentName":"attachment1.png"}]}`))
 		case r.URL.Path == "/api/accounts/42/folders/1/messages/101/content":
 			// Real shape: messageId comes back as a NUMBER here (unlike the
 			// list endpoints, which send it as a string), and the body has
@@ -365,3 +367,27 @@ func TestRefreshRejectedToken(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadAttachments(t *testing.T) {
+	m := newMockZoho(t)
+	// Clear AccountID to test self-healing resolution via /accounts
+	m.client.AccountID = ""
+
+	files := []UploadFile{
+		{Name: "test.txt", Content: strings.NewReader("hello world")},
+	}
+	atts, err := m.client.UploadAttachments(context.Background(), files)
+	if err != nil {
+		t.Fatalf("UploadAttachments failed: %v", err)
+	}
+	if len(atts) == 0 {
+		t.Fatalf("expected attachment ref, got none")
+	}
+	if atts[0].AttachmentName != "attachment1.png" && atts[0].AttachmentName != "test.txt" {
+		t.Errorf("unexpected attachment name: %s", atts[0].AttachmentName)
+	}
+	if m.client.AccountID == "" {
+		t.Errorf("expected AccountID to be self-healed")
+	}
+}
+
