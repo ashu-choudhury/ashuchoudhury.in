@@ -18,7 +18,6 @@ import (
 type MailConnectData struct {
 	ClientID     string
 	ClientSecret string
-	DataCenter   string
 	RedirectURI  string
 	Connected    bool
 	Email        string

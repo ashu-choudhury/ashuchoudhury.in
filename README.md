@@ -60,13 +60,15 @@ The admin panel includes a full email client backed by the free Zoho Mail REST A
 
 ### One-time setup (Admin → Mail)
 
-1. Create a **Server-based Application** in the Zoho API Console for your data center (`https://api-console.zoho.com` for US, `.in` for India, `.eu` for Europe, …).
+1. Create a **Server-based Application** in the Zoho API Console for India: `https://api-console.zoho.in`.
 2. Add the **Authorized Redirect URI** shown on the connect screen (e.g. `https://your-site/admin/mail/oauth/callback`) to that app.
-3. Paste the **Client ID** and **Client Secret**, pick your **data center**, and click **Connect Zoho Mail**. You'll be taken to Zoho's consent screen (scopes: `ZohoMail.messages.ALL`, `ZohoMail.accounts.READ`, `ZohoMail.folders.READ`, `ZohoMail.attachments.ALL`).
+3. Paste the **Client ID** and **Client Secret** and click **Connect Zoho Mail**. You'll be taken to Zoho's consent screen (scopes: `ZohoMail.messages.ALL`, `ZohoMail.accounts.READ`, `ZohoMail.folders.READ`, `ZohoMail.attachments.ALL`).
+
+The data center is **fixed to India** (`accounts.zoho.in` / `mail.zoho.in`) — there is no region selector, because selectable regions caused OAuth token mismatches for the Indian account.
 
 Tokens are stored in the `settings` table and refreshed automatically (access tokens live one hour). The API works on the free Zoho Mail plans — sending limits are dynamic per account reputation.
 
-Credentials can also live in the environment — `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_DATA_CENTER` are seeded into the settings table at boot (only when set, so an empty var never wipes a value entered on the connect screen). A `.env` file next to the binary is loaded automatically (real environment variables win). Pick the data center matching your Zoho Mail URL — `mail.zoho.in` → India, `mail.zoho.com` → US, `mail.zoho.sa` → Saudi Arabia, etc.
+Credentials can also live in the environment — `ZOHO_CLIENT_ID` and `ZOHO_CLIENT_SECRET` are seeded into the settings table at boot (only when set, so an empty var never wipes a value entered on the connect screen). A `.env` file next to the binary is loaded automatically (real environment variables win). The data center is always India (`mail.zoho.in`).
 
 ### Capabilities
 

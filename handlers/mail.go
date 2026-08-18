@@ -20,10 +20,13 @@ import (
 // ---------------------------------------------------------------------------
 // Zoho Mail settings keys (settings table, same pattern as the AI config)
 
+// The Zoho data center is fixed to India (accounts.zoho.in /
+// mail.zoho.in) — the account is an Indian Zoho account, and selectable
+// regions caused OAuth token mismatches. There is deliberately no
+// data-center setting anymore.
 const (
 	settingZohoClientID     = "zoho_client_id"
 	settingZohoClientSecret = "zoho_client_secret"
-	settingZohoDataCenter   = "zoho_data_center"
 	settingZohoRefreshToken = "zoho_refresh_token"
 	settingZohoAccessToken  = "zoho_access_token"
 	settingZohoAccessExpiry = "zoho_access_expiry"
@@ -48,7 +51,6 @@ func (s *Server) seedZohoFromEnv() {
 	for _, kv := range []struct{ env, key string }{
 		{"ZOHO_CLIENT_ID", settingZohoClientID},
 		{"ZOHO_CLIENT_SECRET", settingZohoClientSecret},
-		{"ZOHO_DATA_CENTER", settingZohoDataCenter},
 	} {
 		if v := strings.TrimSpace(os.Getenv(kv.env)); v != "" {
 			_ = s.Store.SetSetting(ctx, kv.key, v)
@@ -67,11 +69,8 @@ func (s *Server) zohoClient(ctx context.Context) (*zoho.Client, error) {
 	if cid == "" || secret == "" {
 		return nil, errZohoNotConfigured
 	}
-	dc, _ := s.Store.GetSetting(ctx, settingZohoDataCenter)
-	if dc == "" {
-		dc = "com"
-	}
-	c := zoho.New(dc, cid, secret)
+	// India is the only supported data center — see the zoho package.
+	c := zoho.New(cid, secret)
 	c.AccountID, _ = s.Store.GetSetting(ctx, settingZohoAccountID)
 	c.AccessToken, _ = s.Store.GetSetting(ctx, settingZohoAccessToken)
 	c.RefreshToken, _ = s.Store.GetSetting(ctx, settingZohoRefreshToken)
@@ -128,14 +127,12 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cid, _ := s.Store.GetSetting(ctx, settingZohoClientID)
 	secret, _ := s.Store.GetSetting(ctx, settingZohoClientSecret)
-	dc, _ := s.Store.GetSetting(ctx, settingZohoDataCenter)
 	email, _ := s.Store.GetSetting(ctx, settingZohoEmail)
 
 	if !s.zohoConnected(ctx) || cid == "" || secret == "" {
 		d := components.MailConnectData{
 			ClientID:     cid,
 			ClientSecret: secret,
-			DataCenter:   dc,
 			RedirectURI:  mailRedirectURI(r),
 			Connected:    false,
 			Email:        email,
@@ -223,12 +220,10 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderMailConnectError(w http.ResponseWriter, r *http.Request, email, msg string) {
 	cid, _ := s.Store.GetSetting(r.Context(), settingZohoClientID)
 	secret, _ := s.Store.GetSetting(r.Context(), settingZohoClientSecret)
-	dc, _ := s.Store.GetSetting(r.Context(), settingZohoDataCenter)
 	s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Mail", Active: "mail"},
 		components.AdminMailConnect(components.MailConnectData{
 			ClientID:     cid,
 			ClientSecret: secret,
-			DataCenter:   dc,
 			RedirectURI:  mailRedirectURI(r),
 			Connected:    true,
 			Email:        email,
@@ -245,17 +240,12 @@ func (s *Server) handleAdminMailConnect(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	cid := strings.TrimSpace(r.FormValue("client_id"))
 	secret := strings.TrimSpace(r.FormValue("client_secret"))
-	dc := strings.TrimSpace(r.FormValue("data_center"))
-	if dc == "" {
-		dc = "com"
-	}
 	if cid == "" || secret == "" {
 		http.Redirect(w, r, "/admin/mail?err="+url.QueryEscape("Client ID and Client Secret are required"), http.StatusSeeOther)
 		return
 	}
 	_ = s.Store.SetSetting(ctx, settingZohoClientID, cid)
 	_ = s.Store.SetSetting(ctx, settingZohoClientSecret, secret)
-	_ = s.Store.SetSetting(ctx, settingZohoDataCenter, dc)
 	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/mail/oauth/start", http.StatusSeeOther)
 }

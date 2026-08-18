@@ -56,9 +56,9 @@ templ AdminMailConnect(d MailConnectData) {
 			</div>
 		}
 		<ol class="mail-steps mb-3">
-			<li>Create a <strong>Server-based Application</strong> in the <a href="https://api-console.zoho.com/" target="_blank" rel="noopener noreferrer">Zoho API Console</a> — pick the console matching your data center (e.g. <code>api-console.zoho.in</code> in India).</li>
+			<li>Create a <strong>Server-based Application</strong> in the <a href="https://api-console.zoho.in/" target="_blank" rel="noopener noreferrer">Zoho API Console (India)</a>.</li>
 			<li>Add the redirect URI below to the app's <strong>Authorized Redirect URIs</strong>.</li>
-			<li>Paste the Client ID and Client Secret here, pick your data center, then click Connect.</li>
+			<li>Paste the Client ID and Client Secret here, then click Connect.</li>
 		</ol>
 		<div class="form-field">
 			<label>Authorized Redirect URI (register this in Zoho)</label>
@@ -74,19 +74,7 @@ templ AdminMailConnect(d MailConnectData) {
 				<label for="zoho-client-secret">Client Secret</label>
 				<input id="zoho-client-secret" name="client_secret" type="password" required value={ d.ClientSecret } placeholder="••••••••••••"/>
 			</div>
-			<div class="form-field">
-				<label for="zoho-data-center">Data center</label>
-				<select id="zoho-data-center" name="data_center">
-					<option value="com" selected={ d.DataCenter == "com" }>United States (.com)</option>
-					<option value="eu" selected={ d.DataCenter == "eu" }>Europe (.eu)</option>
-					<option value="in" selected={ d.DataCenter == "in" }>India (.in)</option>
-					<option value="com.au" selected={ d.DataCenter == "com.au" }>Australia (.com.au)</option>
-					<option value="jp" selected={ d.DataCenter == "jp" }>Japan (.jp)</option>
-					<option value="ca" selected={ d.DataCenter == "ca" }>Canada (.ca)</option>
-					<option value="sa" selected={ d.DataCenter == "sa" }>Saudi Arabia (.sa)</option>
-				</select>
-				<p class="form-note">Pick the region your Zoho Mail URL uses — <code>mail.zoho.com</code> → United States, <code>mail.zoho.in</code> → India, etc.</p>
-			</div>
+			<p class="form-note">Your Zoho Mail region is fixed to <strong>India</strong> (<code>mail.zoho.in</code>) — no region selection needed.</p>
 			<div class="admin-form-actions">
 				<button class="btn btn-primary" type="submit">
 					@Icon("mail", 16)

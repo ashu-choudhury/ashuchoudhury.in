@@ -35,30 +35,20 @@ import (
 // DataCenter describes one Zoho region: its accounts (OAuth) host and
 // its Mail API base URL.
 type DataCenter struct {
-	Code     string // form value: "com", "eu", "in", ...
-	Accounts string // OAuth host, e.g. https://accounts.zoho.com
-	Mail     string // API base, e.g. https://mail.zoho.com/api
+	Code     string
+	Accounts string // OAuth host, e.g. https://accounts.zoho.in
+	Mail     string // API base, e.g. https://mail.zoho.in/api
 }
 
-// DataCenters is the full set of Zoho data centers. The Code values are
-// what the user picks in the admin connect screen.
-var DataCenters = map[string]DataCenter{
-	"com":    {Code: "com", Accounts: "https://accounts.zoho.com", Mail: "https://mail.zoho.com/api"},
-	"eu":     {Code: "eu", Accounts: "https://accounts.zoho.eu", Mail: "https://mail.zoho.eu/api"},
-	"in":     {Code: "in", Accounts: "https://accounts.zoho.in", Mail: "https://mail.zoho.in/api"},
-	"com.au": {Code: "com.au", Accounts: "https://accounts.zoho.com.au", Mail: "https://mail.zoho.com.au/api"},
-	"jp":     {Code: "jp", Accounts: "https://accounts.zoho.jp", Mail: "https://mail.zoho.jp/api"},
-	"ca":     {Code: "ca", Accounts: "https://accounts.zoho.ca", Mail: "https://mail.zohocloud.ca/api"},
-	"sa":     {Code: "sa", Accounts: "https://accounts.zoho.sa", Mail: "https://mail.zoho.sa/api"},
-	"com.cn": {Code: "com.cn", Accounts: "https://accounts.zoho.com.cn", Mail: "https://mail.zoho.com.cn/api"},
-}
-
-// DC returns the DataCenter for a code, defaulting to the US one.
-func DC(code string) DataCenter {
-	if d, ok := DataCenters[code]; ok {
-		return d
-	}
-	return DataCenters["com"]
+// India is the only supported Zoho data center — the app is pinned to
+// mail.zoho.in / accounts.zoho.in. Other regions (US, EU, Saudi Arabia,
+// …) used to be selectable on the connect screen and caused OAuth token
+// mismatches (the account is an Indian Zoho account), so the selector
+// and every other region have been removed.
+var India = DataCenter{
+	Code:     "in",
+	Accounts: "https://accounts.zoho.in",
+	Mail:     "https://mail.zoho.in/api",
 }
 
 // APIError is a Zoho error envelope. Mail API errors look like
@@ -293,10 +283,10 @@ type Client struct {
 	refreshing bool
 }
 
-// New builds a client for the given data-center code and OAuth app.
-func New(dcCode, clientID, clientSecret string) *Client {
+// New builds a client for the India data center and the given OAuth app.
+func New(clientID, clientSecret string) *Client {
 	return &Client{
-		DataCenter:   DC(dcCode),
+		DataCenter:   India,
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		HTTP:         &http.Client{Timeout: 60 * time.Second},
