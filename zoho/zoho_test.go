@@ -3,6 +3,7 @@ package zoho
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -185,5 +186,56 @@ func TestMessageContent(t *testing.T) {
 	}
 	if c.Content != "<p>Body</p>" || c.PlainText != "Body" {
 		t.Errorf("unexpected content: %+v", c)
+	}
+}
+
+// TestRefreshRejectedToken is the exact scenario from the field: the
+// saved refresh token is dead and Zoho's OAuth endpoint answers
+// {"error":"invalid_grant"}. The client must surface ErrTokenRejected
+// (which the handlers turn into a "reconnect" message) instead of the
+// useless generic "api error (code 0)". Both rejection shapes are
+// covered: a non-2xx status with an error body, and a 200 OK whose body
+// carries the error (which is what invalid_client actually looks like).
+func TestRefreshRejectedToken(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"non2xx invalid_grant", http.StatusBadRequest,
+			`{"error":"invalid_grant","error_description":"Refresh token is invalid or expired."}`},
+		{"200 invalid_client", http.StatusOK,
+			`{"error":"invalid_client","error_description":"Client authentication failed."}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMockZoho(t)
+
+			// Point the client at a fresh accounts server that always
+			// rejects the refresh grant, simulating dead credentials.
+			rejected := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				w.Write([]byte(tc.body))
+			}))
+			defer rejected.Close()
+			m.client.DataCenter = DataCenter{
+				Accounts: rejected.URL,
+				Mail:     m.mail.URL + "/api",
+			}
+
+			// Force the client to need a fresh access token so it must refresh.
+			m.client.AccessToken = ""
+			m.client.AccessExpiry = time.Time{}
+
+			_, err := m.client.ListMessages(context.Background(), "1", 1, 30, "all")
+			if err == nil {
+				t.Fatal("want an error from ListMessages")
+			}
+			if !errors.Is(err, ErrTokenRejected) {
+				t.Errorf("want ErrTokenRejected, got: %v", err)
+			}
+			if strings.Contains(err.Error(), "code 0") {
+				t.Errorf("must not surface the useless 'code 0' message: %v", err)
+			}
+		})
 	}
 }

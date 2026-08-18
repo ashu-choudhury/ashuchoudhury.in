@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -60,11 +61,14 @@ func DC(code string) DataCenter {
 	return DataCenters["com"]
 }
 
-// APIError is a Zoho error envelope: {"status":{"code":N,...},"data":{"moreInfo":"..."}}.
+// APIError is a Zoho error envelope. Mail API errors look like
+// {"status":{"code":N,"description":"..."},"data":{"moreInfo":"..."}} while the
+// OAuth token endpoint errors look like {"error":"invalid_grant","error_description":"..."}.
+// Both shapes are parsed into this type.
 type APIError struct {
 	Code     int
-	Message  string // HTTP-level description
-	MoreInfo string // Zoho-level detail
+	Message  string // HTTP-level description or OAuth "error" value
+	MoreInfo string // Zoho-level detail or OAuth "error_description"
 }
 
 func (e *APIError) Error() string {
@@ -75,6 +79,29 @@ func (e *APIError) Error() string {
 		return fmt.Sprintf("zoho: %s (code %d)", e.Message, e.Code)
 	}
 	return fmt.Sprintf("zoho: api error (code %d)", e.Code)
+}
+
+// ErrTokenRejected is returned when Zoho's OAuth endpoint refuses the
+// saved credentials (invalid/expired/revoked refresh token). It is not
+// transient — the account must be reconnected.
+var ErrTokenRejected = errors.New("zoho: the saved Zoho session was rejected (refresh token invalid or expired)")
+
+// isAuthFailure reports whether an OAuth token-endpoint error means the
+// saved credentials are dead (as opposed to a transient network problem).
+func isAuthFailure(code int, message string) bool {
+	msg := strings.ToLower(message)
+	switch {
+	case code == http.StatusUnauthorized:
+		return true
+	case strings.Contains(msg, "invalid_grant"),
+		strings.Contains(msg, "invalid_client"),
+		strings.Contains(msg, "invalid_token"),
+		strings.Contains(msg, "unauthorized_client"),
+		strings.Contains(msg, "access_denied"),
+		strings.Contains(msg, "expired"):
+		return true
+	}
+	return false
 }
 
 // Account is one mailbox account in the user's Zoho profile.
@@ -239,7 +266,6 @@ func (c *Client) AuthURL(redirectURI, state, scope, accessType string) string {
 	if accessType != "" {
 		q.Set("access_type", accessType)
 	}
-	q.Set("prompt", "consent")
 	if state != "" {
 		q.Set("state", state)
 	}
@@ -317,9 +343,19 @@ func (c *Client) refresh(ctx context.Context) error {
 
 	var tr tokenResponse
 	if err := doJSON(c.HTTP, req, &tr); err != nil {
+		// A rejected refresh token is not transient — surface it as a
+		// typed error so callers can tell the user to reconnect.
+		if ae, ok := err.(*APIError); ok && isAuthFailure(ae.Code, ae.Message+" "+ae.MoreInfo) {
+			return fmt.Errorf("%w: %s", ErrTokenRejected, ae.Error())
+		}
 		return err
 	}
 	if tr.AccessToken == "" {
+		// Some OAuth failures (e.g. invalid_client) come back as HTTP 200
+		// with an error body — treat those like the non-2xx case.
+		if isAuthFailure(0, tr.Error) {
+			return fmt.Errorf("%w: zoho: token refresh failed: %s", ErrTokenRejected, tr.Error)
+		}
 		return fmt.Errorf("zoho: token refresh failed: %s", tr.Error)
 	}
 
@@ -392,22 +428,37 @@ func doJSON(hc *http.Client, req *http.Request, out any) error {
 		return err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var e struct {
-			Status struct {
-				Code        int    `json:"code"`
-				Description string `json:"description"`
-			} `json:"status"`
-			Data struct {
-				MoreInfo string `json:"moreInfo"`
-			} `json:"data"`
-		}
-		_ = json.Unmarshal(body, &e)
-		return &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
+		return parseAPIError(resp.StatusCode, body)
 	}
 	if out != nil {
 		return json.Unmarshal(body, out)
 	}
 	return nil
+}
+
+// parseAPIError reads a non-2xx response body into an *APIError,
+// understanding both the Mail API envelope and the OAuth token-endpoint
+// {"error":...} shape (whose bodies have no "status" wrapper — the
+// previous code surfaced those as a useless "api error (code 0)").
+func parseAPIError(statusCode int, body []byte) error {
+	var e struct {
+		Status struct {
+			Code        int    `json:"code"`
+			Description string `json:"description"`
+		} `json:"status"`
+		Data struct {
+			MoreInfo string `json:"moreInfo"`
+		} `json:"data"`
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &e); err != nil {
+		return &APIError{Code: statusCode, Message: strings.TrimSpace(string(body))}
+	}
+	if e.Error != "" {
+		return &APIError{Code: statusCode, Message: e.Error, MoreInfo: e.ErrorDescription}
+	}
+	return &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
 }
 
 // apiGet performs an authenticated GET and decodes the "data" payload
@@ -445,17 +496,7 @@ func (c *Client) apiGet(ctx context.Context, path string, query url.Values, out 
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			var e struct {
-				Status struct {
-					Code        int    `json:"code"`
-					Description string `json:"description"`
-				} `json:"status"`
-				Data struct {
-					MoreInfo string `json:"moreInfo"`
-				} `json:"data"`
-			}
-			_ = json.Unmarshal(body, &e)
-			return &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
+			return parseAPIError(resp.StatusCode, body)
 		}
 		var env envelope
 		if err := json.Unmarshal(body, &env); err != nil {
@@ -516,17 +557,7 @@ func (c *Client) apiSend(ctx context.Context, method, path string, query url.Val
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			var e struct {
-				Status struct {
-					Code        int    `json:"code"`
-					Description string `json:"description"`
-				} `json:"status"`
-				Data struct {
-					MoreInfo string `json:"moreInfo"`
-				} `json:"data"`
-			}
-			_ = json.Unmarshal(respBody, &e)
-			return &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
+			return parseAPIError(resp.StatusCode, respBody)
 		}
 		var env envelope
 		if err := json.Unmarshal(respBody, &env); err != nil {
@@ -573,17 +604,7 @@ func (c *Client) rawGet(ctx context.Context, path string, query url.Values) ([]b
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			var e struct {
-				Status struct {
-					Code        int    `json:"code"`
-					Description string `json:"description"`
-				} `json:"status"`
-				Data struct {
-					MoreInfo string `json:"moreInfo"`
-				} `json:"data"`
-			}
-			_ = json.Unmarshal(body, &e)
-			return nil, "", &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
+			return nil, "", parseAPIError(resp.StatusCode, body)
 		}
 		return body, resp.Header.Get("Content-Disposition"), nil
 	}
@@ -868,17 +889,7 @@ func (c *Client) UploadAttachments(ctx context.Context, files []UploadFile) ([]A
 		return c.UploadAttachments(ctx, files)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var e struct {
-			Status struct {
-				Code        int    `json:"code"`
-				Description string `json:"description"`
-			} `json:"status"`
-			Data struct {
-				MoreInfo string `json:"moreInfo"`
-			} `json:"data"`
-		}
-		_ = json.Unmarshal(body, &e)
-		return nil, &APIError{Code: e.Status.Code, Message: e.Status.Description, MoreInfo: e.Data.MoreInfo}
+		return nil, parseAPIError(resp.StatusCode, body)
 	}
 	var env envelope
 	if err := json.Unmarshal(body, &env); err != nil {

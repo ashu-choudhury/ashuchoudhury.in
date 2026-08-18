@@ -77,6 +77,18 @@ func (s *Server) zohoConnected(ctx context.Context) bool {
 	return mustSetting(ctx, s, settingZohoRefreshToken) != ""
 }
 
+// zohoClearTokens wipes the OAuth tokens and account identity, forcing
+// the connect screen to reappear. Used when Zoho rejects the saved
+// session or the user disconnects.
+func (s *Server) zohoClearTokens(ctx context.Context) {
+	for _, k := range []string{
+		settingZohoRefreshToken, settingZohoAccessToken, settingZohoAccessExpiry,
+		settingZohoAccountID, settingZohoEmail, settingZohoOAuthState,
+	} {
+		_ = s.Store.SetSetting(ctx, k, "")
+	}
+}
+
 // mailRedirectURI derives the OAuth callback URI from the incoming
 // request, so localhost and production both work without config. It must
 // match a redirect URI registered in the Zoho API Console.
@@ -109,6 +121,7 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 			RedirectURI:  mailRedirectURI(r),
 			Connected:    false,
 			Email:        email,
+			Error:        r.URL.Query().Get("err"),
 		}
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Mail", Active: "mail"}, components.AdminMailConnect(d))
 		return
@@ -119,8 +132,40 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 		s.renderMailConnectError(w, r, email, "Could not build the Zoho client: "+err.Error())
 		return
 	}
+
+	// Self-heal: if a previous run stored a token but not the account id
+	// (e.g. the accounts listing failed mid-connect), fetch it now.
+	if c.AccountID == "" {
+		if accounts, aerr := c.Accounts(ctx); aerr == nil {
+			for _, a := range accounts {
+				if a.AccountID == "" {
+					continue
+				}
+				_ = s.Store.SetSetting(ctx, settingZohoAccountID, a.AccountID)
+				if a.EmailAddress != "" {
+					_ = s.Store.SetSetting(ctx, settingZohoEmail, a.EmailAddress)
+					email = a.EmailAddress
+				}
+				c.AccountID = a.AccountID
+				break
+			}
+		}
+	}
+	if c.AccountID == "" {
+		s.zohoClearTokens(ctx)
+		s.renderMailConnectError(w, r, email, "Zoho did not return any mail account for this user — please reconnect.")
+		return
+	}
+
 	folders, err := c.Folders(ctx)
 	if err != nil {
+		if errors.Is(err, zoho.ErrTokenRejected) {
+			// The saved session is dead (invalid/expired refresh token).
+			// Clear it so the connect screen appears with a clear message.
+			s.zohoClearTokens(ctx)
+			s.renderMailConnectError(w, r, email, "Zoho rejected the saved session — your refresh token is invalid or expired. Click Disconnect, then Connect Zoho Mail again to re-authorize.")
+			return
+		}
 		s.renderMailConnectError(w, r, email, "Could not load folders from Zoho: "+err.Error())
 		return
 	}
@@ -132,6 +177,11 @@ func (s *Server) handleAdminMail(w http.ResponseWriter, r *http.Request) {
 	start := atoiDefault(r.URL.Query().Get("start"), 1)
 	msgs, err := c.ListMessages(ctx, active, start, mailPageSize, "all")
 	if err != nil {
+		if errors.Is(err, zoho.ErrTokenRejected) {
+			s.zohoClearTokens(ctx)
+			s.renderMailConnectError(w, r, email, "Zoho rejected the saved session — your refresh token is invalid or expired. Click Disconnect, then Connect Zoho Mail again to re-authorize.")
+			return
+		}
 		s.renderAdminPage(w, r, components.AdminPageMeta{Title: "Mail", Active: "mail"},
 			components.AdminMailShell(components.MailListData{Folders: folders, ActiveFolder: active, Error: "Could not load messages: " + err.Error(), Email: email}))
 		return
@@ -261,12 +311,7 @@ func (s *Server) handleAdminMailOAuthCallback(w http.ResponseWriter, r *http.Req
 // handleAdminMailDisconnect clears all Zoho credentials.
 func (s *Server) handleAdminMailDisconnect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	for _, k := range []string{
-		settingZohoRefreshToken, settingZohoAccessToken, settingZohoAccessExpiry,
-		settingZohoAccountID, settingZohoEmail, settingZohoOAuthState,
-	} {
-		_ = s.Store.SetSetting(ctx, k, "")
-	}
+	s.zohoClearTokens(ctx)
 	s.TriggerBackup(ctx)
 	http.Redirect(w, r, "/admin/mail", http.StatusSeeOther)
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -84,7 +85,7 @@ func (s *Server) buildListData(r *http.Request, c *zoho.Client, folderID string,
 	if searchQuery != "" {
 		msgs, err := c.SearchMessages(ctx, searchQuery)
 		if err != nil {
-			d.Error = "Search failed: " + err.Error()
+			d.Error = "Search failed: " + s.mailSessionErr(ctx, err)
 			return d
 		}
 		d.Messages = msgs
@@ -92,7 +93,7 @@ func (s *Server) buildListData(r *http.Request, c *zoho.Client, folderID string,
 	}
 	folders, err := c.Folders(ctx)
 	if err != nil {
-		d.Error = "Could not load folders: " + err.Error()
+		d.Error = "Could not load folders: " + s.mailSessionErr(ctx, err)
 		return d
 	}
 	d.Folders = folders
@@ -103,12 +104,23 @@ func (s *Server) buildListData(r *http.Request, c *zoho.Client, folderID string,
 	d.ActiveFolderName = components.MailFolderName(folders, folderID)
 	msgs, err := c.ListMessages(ctx, folderID, start, mailPageSize, "all")
 	if err != nil {
-		d.Error = "Could not load messages: " + err.Error()
+		d.Error = "Could not load messages: " + s.mailSessionErr(ctx, err)
 		return d
 	}
 	d.Messages = msgs
 	d.HasMore = len(msgs) == mailPageSize
 	return d
+}
+
+// mailSessionErr turns a Zoho error into a user-facing message. When the
+// refresh token is dead it clears the saved session (so the connect screen
+// reappears) and explains that a reconnect is needed.
+func (s *Server) mailSessionErr(ctx context.Context, err error) string {
+	if errors.Is(err, zoho.ErrTokenRejected) {
+		s.zohoClearTokens(ctx)
+		return "Zoho rejected the saved session — the refresh token is invalid or expired. Go to Mail and connect again."
+	}
+	return err.Error()
 }
 
 // ---------------------------------------------------------------------------

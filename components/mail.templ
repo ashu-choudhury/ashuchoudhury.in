@@ -15,7 +15,11 @@ templ AdminMailConnect(d MailConnectData) {
 		<div class="card admin-panel">
 			<div class="form-msg ok mb-2">
 				@Icon("check-circle", 17)
-				<div>Zoho Mail is connected as <strong>{ d.Email }</strong>.</div>
+				if d.Email != "" {
+					<div>Zoho Mail is connected as <strong>{ d.Email }</strong>.</div>
+				} else {
+					<div>Zoho Mail is connected.</div>
+				}
 			</div>
 			if d.Error != "" {
 				<div class="form-msg err mb-2">
@@ -37,8 +41,7 @@ templ AdminMailConnect(d MailConnectData) {
 				</form>
 			</div>
 		</div>
-		return
-	}
+	} else {
 	<div class="card admin-panel" style="max-width: 720px;">
 		<h2 style="font-size:1.2rem; margin-bottom:0.5rem;">Connect Zoho Mail</h2>
 		<p class="form-note mb-2">
@@ -92,6 +95,7 @@ templ AdminMailConnect(d MailConnectData) {
 			</div>
 		</form>
 	</div>
+	}
 }
 
 // ---------------------------------------------------------------------------
